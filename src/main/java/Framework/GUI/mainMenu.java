@@ -14,7 +14,7 @@ import java.net.URL;
 
 public class mainMenu extends Application {
 
-    String[] tabNames = {"overview", "ctcOffice", "trackModel", "waysideController", "trainModel", "trainController"};
+    String[] tabNames = {"CTC_Main_UI", "trackModel", "waysideController", "trainModel", "trainController"};
 
     @Override
     public void start(Stage primaryStage) {
@@ -41,7 +41,8 @@ public class mainMenu extends Application {
                 if (e.getButton() == MouseButton.SECONDARY) {
                     contextMenu.show(tabButton, e.getScreenX(), e.getScreenY());
                 } else if (e.getButton() == MouseButton.PRIMARY) {
-                    openModuleTab(tabPane, tabNames[moduleId]);
+//                    openModuleTab(tabPane, tabNames[moduleId]);
+                    openInNewWindow(tabNames[moduleId]);
                 }
             });
 
@@ -54,7 +55,7 @@ public class mainMenu extends Application {
 
         root.setTop(topContainer);
 
-        Scene scene = new Scene(root, 1920, 1080);
+        Scene scene = new Scene(root);
         primaryStage.setScene(scene);
         primaryStage.setTitle("J.A.M.E.S - Train Management System");
         primaryStage.show();
@@ -63,19 +64,15 @@ public class mainMenu extends Application {
     private void openInNewWindow(String moduleName) {
         Stage newStage = new Stage();
         Node content = createModuleContent(moduleName); // This now loads from FXML
-        Scene newScene = new Scene(new VBox(content), 1280, 720); // Ensure the layout fits the loaded content
+        Scene newScene;
+        if(moduleName.equals("CTC_Main_UI")) {
+            newScene = new Scene(new VBox(content) , 800, 600);
+        }else {
+            newScene = new Scene(new VBox(content)); // Ensure the layout fits the loaded content
+        }
         newStage.setScene(newScene);
         newStage.setTitle(moduleName);
         newStage.show();
-    }
-
-
-    private void openModuleTab(TabPane tabPane, String moduleName) {
-        Tab tab = new Tab(moduleName);
-        Node content = createModuleContent(moduleName); // Get the complex UI for the module
-        tab.setContent(content); // Set the complex UI as the content of the tab
-        tabPane.getTabs().add(tab);
-        tabPane.getSelectionModel().select(tab);
     }
 
     private Node createModuleContent(String moduleName) {
