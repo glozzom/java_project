@@ -1,10 +1,9 @@
 package Integration;
 
 import Framework.Simulation.TrainSystem;
-import Utilities.BasicLineMap;
-import Utilities.ParsedBasicBlocks;
+import Utilities.BasicTrackMap;
+import Utilities.BasicBlockParser;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import trackModel.TrackLine;
 
 import static Utilities.Enums.Lines.GREEN;
@@ -12,12 +11,12 @@ import static Utilities.Enums.Lines.GREEN;
 public class TrainModelAndController extends BaseTest  {
 
     private final TrainSystem trainSystem = new TrainSystem();
-    private final BasicLineMap trackLines = ParsedBasicBlocks.getInstance().getAllBasicLines();
+    private final BasicTrackMap trackLines = BasicBlockParser.getInstance().getAllBasicLines();
     private  TrackLine trackLine;
 
     @BeforeEach
     void setUp() {
-        TrackLine line = new TrackLine(GREEN, trackLines.get(GREEN));
+        TrackLine line = new TrackLine(GREEN);
     }
 
 //    @Test

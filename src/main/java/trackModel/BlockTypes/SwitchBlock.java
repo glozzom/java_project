@@ -13,12 +13,14 @@ public class SwitchBlock implements BlockFeature {
 
      boolean switchState;
      boolean switchStateAuto;
+     Direction primarySwitchDir;
 
     public SwitchBlock(NextBlock nextBlock) {
         this.northDef = nextBlock.northDefault();
         this.southDef = nextBlock.southDefault();
         this.northAlt = nextBlock.northAlternate().blockNumber() != -1 ? nextBlock.northAlternate() : null;
         this.southAlt = nextBlock.southAlternate().blockNumber() != -1 ? nextBlock.southAlternate() : null;
+        this.primarySwitchDir = nextBlock.primarySwitchDirection();
     }
 
     @Override
@@ -54,11 +56,16 @@ public class SwitchBlock implements BlockFeature {
 
     @Override
     public Connection getNextBlock(Direction direction) {
-        if(switchState) {
+        if(switchState && primarySwitchDir == direction) {
             return (direction == Direction.NORTH) ? northAlt : southAlt;
         } else {
             return (direction == Direction.NORTH) ? northDef : southDef;
         }
+    }
+
+    @Override
+    public Direction getPrimarySwitchDir() {
+        return primarySwitchDir;
     }
 
     @Override
@@ -87,12 +94,12 @@ public class SwitchBlock implements BlockFeature {
 
     @Override
     public String getStationName() {
-        return null;
+        return "";
     }
 
     @Override
     public String getDoorDirection() {
-        return null;
+        return "";
     }
 
     @Override

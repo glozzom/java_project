@@ -23,7 +23,7 @@ public record BasicBlock(
         Optional<String> stationName,
         Optional<String> doorDirection,
         NextBlock nextBlock
-) {
+) implements Comparable<BasicBlock> {
 
     public record Connection(
             int blockNumber,
@@ -42,8 +42,28 @@ public record BasicBlock(
     ) {
     }
 
+    public BasicBlock () {
+        this(Lines.GREEN, "", 0, 0, 0, 0, 0, 0,
+                false, false, false, BlockType.REGULAR, Optional.empty(), Optional.empty(),
+                new NextBlock(new Connection(-1, false), new Connection(-1, false), new Connection(-1, false),
+                        new Connection(-1, false), new Connection(-1, false), new Connection(-1, false), Direction.NORTH));
+    }
 
+    public boolean isStation() {
+        return blockType == BlockType.STATION;
+    }
 
+    public boolean isCrossing() {
+        return blockType == BlockType.CROSSING;
+    }
 
+    public boolean isYard() {
+        return blockType == BlockType.YARD;
+    }
+
+    @Override
+    public int compareTo(BasicBlock o) {
+        return Integer.compare(this.blockNumber, o.blockNumber);
+    }
 
 }

@@ -3,7 +3,7 @@ package stubs;
 import Common.TrainController;
 import Common.TrainModel;
 import Utilities.Records.Beacon;
-import Utilities.Records.UpdatedTrainValues;
+import trainModel.Records.UpdatedTrainValues;
 import trainController.TrainControllerSubject;
 
 public class trainControllerStub implements TrainController {
@@ -49,7 +49,12 @@ public class trainControllerStub implements TrainController {
 
     }
 
-//    @Override
+    @Override
+    public void setPassengerEBrake() {
+
+    }
+
+    //    @Override
     public void setKi(double Ki) {
 
     }
@@ -214,6 +219,11 @@ public class trainControllerStub implements TrainController {
 
     }
 
+    @Override
+    public boolean isHW() {
+        return false;
+    }
+
     //    @Override
     public boolean getLeftPlatform() {
         return false;
@@ -225,7 +235,7 @@ public class trainControllerStub implements TrainController {
     }
 
 //    @Override
-    public String getStationName() {
+    public String getNextStationName() {
         return null;
     }
 
@@ -244,7 +254,17 @@ public class trainControllerStub implements TrainController {
         return false;
     }
 
-//    @Override
+    @Override
+    public Beacon getBeacon() {
+        return null;
+    }
+
+    @Override
+    public void onBlock() {
+
+    }
+
+    //    @Override
     public void setInTunnel(boolean inTunnel) {
 
     }
@@ -275,7 +295,12 @@ public class trainControllerStub implements TrainController {
     }
 
     @Override
-    public void setValue(String propertyName, Object newValue) {
+    public void checkFailures(double power) {
+
+    }
+
+    @Override
+    public void setValue(Enum<?> propertyName, Object newValue) {
 
     }
 }

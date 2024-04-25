@@ -1,9 +1,12 @@
 package Utilities.Records;
 
+import Utilities.Enums.BeaconType;
+
 import java.util.ArrayDeque;
 
-public record Beacon(int startId,
-                     int endId,
-                     ArrayDeque<BeaconEntry> beaconEntries
-)
-{ }
+public record Beacon(BeaconType type,
+                     Integer sourceId,
+                     Integer endId,
+                     ArrayDeque<Integer> blockIndices
+) {
+}

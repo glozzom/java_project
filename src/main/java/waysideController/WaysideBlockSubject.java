@@ -5,8 +5,6 @@ import Framework.Support.Notifier;
 import Framework.Support.ObservableHashMap;
 import javafx.application.Platform;
 import javafx.beans.property.*;
-import javafx.scene.paint.Color;
-import javafx.scene.paint.Paint;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -36,12 +34,7 @@ public class WaysideBlockSubject implements AbstractSubject, Notifier {
         properties.put(lightState_p, new SimpleBooleanProperty(block.getLightState()));
         properties.put(crossingState_p, new SimpleBooleanProperty(block.getCrossingState()));
         properties.put(authority_p, new SimpleBooleanProperty(block.getBooleanAuth()));
-        properties.put(speed_p, new SimpleDoubleProperty(block.getSpeed()));
-        properties.put(open_p, new SimpleBooleanProperty(block.isOpen()));
-
-        properties.put(lightColor_p, new SimpleObjectProperty<Paint>());
-        updateLightColor();
-        properties.get(lightState_p).addListener((observable, oldValue, newValue) -> updateLightColor());
+        properties.put(inMaintenance_p, new SimpleBooleanProperty(block.inMaintenance()));
 
         properties.put(switchBlockParent_p, new ReadOnlyIntegerWrapper(block.getSwitchBlockParent()));
         properties.put(switchBlockDef_p, new ReadOnlyIntegerWrapper(block.getSwitchBlockDef()));
@@ -56,31 +49,19 @@ public class WaysideBlockSubject implements AbstractSubject, Notifier {
         return block;
     }
 
-    private void updateLightColor() {
-        if(block.hasLight()) {
-            if(getBooleanProperty(lightState_p).get())
-                getTrafficLightColor().set(Color.GREEN);
-            else
-                getTrafficLightColor().set(Color.RED);
-        }
-        else {
-            getTrafficLightColor().set(Color.TRANSPARENT);
-        }
-    }
-
     @Override
     public void setProperty(String propertyName, Object newValue) {
         Runnable updateTask = () -> {
             Property<?> property = properties.get(propertyName);
             updateProperty(property, newValue);
             block.setValue(propertyName, newValue);
-            System.out.println("Property " + propertyName + " updated to " + newValue + " in Subject");
+     //       System.out.println("Property " + propertyName + " updated to " + newValue + " in Wayside Subject");
         };
 
         if (isLogicUpdate) {
             executorService.scheduleWithFixedDelay(() -> {
                 if (!isLogicUpdate) {
-                    System.out.println("Delayed setProperty from GUI");
+   //                 System.out.println("Delayed setProperty from GUI");
                     Platform.runLater(() -> updateFromGUI(updateTask));
                 }
             }, 0, 10, TimeUnit.MILLISECONDS);
@@ -90,7 +71,7 @@ public class WaysideBlockSubject implements AbstractSubject, Notifier {
     }
 
     public void updateFromGUI(Runnable updateLogic) {
-        System.out.println("Called from updateFromGUI.");
+   //     System.out.println("Called from updateFromGUI.");
         isGUIUpdate = true;
         try {
             updateLogic.run();
@@ -139,14 +120,6 @@ public class WaysideBlockSubject implements AbstractSubject, Notifier {
         }
     }
 
-    public ObjectProperty<Paint> getTrafficLightColor() {
-        try {
-            return (ObjectProperty<Paint>) properties.get(lightColor_p);
-        } catch (ClassCastException e) {
-            throw new IllegalArgumentException("Failed to get TrafficLightState property");
-        }
-    }
-
     @Override
     public void notifyChange(String propertyName, Object newValue) {
         // Update property from controller, Internal Logic takes precedence over GUI updates
@@ -154,7 +127,7 @@ public class WaysideBlockSubject implements AbstractSubject, Notifier {
             updateFromLogic(() -> {
                 Property<?> property = properties.get(propertyName);
                 updateProperty(property, newValue);
-                System.out.println("Property " + propertyName + " updated to " + newValue + " in Subject");
+   //             System.out.println("Property " + propertyName + " updated to " + newValue + " in Wayside Subject");
             });
         }
     }

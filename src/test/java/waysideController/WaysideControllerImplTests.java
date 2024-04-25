@@ -4,7 +4,7 @@ import Common.CTCOffice;
 import Common.TrackModel;
 import Integration.BaseTest;
 import Utilities.Enums.Lines;
-import Utilities.ParsedBasicBlocks;
+import Utilities.BasicBlockParser;
 import Utilities.Records.BasicBlock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,6 +38,7 @@ public class WaysideControllerImplTests extends BaseTest {
                 144, 145, 146,
                 147, 148, 149,
                 150},
+                null,
                 trackModel, ctcOffice, "src/main/antlr/GreenLine1.plc");
     }
 
@@ -51,7 +52,7 @@ public class WaysideControllerImplTests extends BaseTest {
             assertEquals(blockMap.get(i).getBlockID(), i);
         }
 
-        ConcurrentSkipListMap<Integer, BasicBlock> blockList = ParsedBasicBlocks.getInstance().getBasicLine(Lines.GREEN);
+        ConcurrentSkipListMap<Integer, BasicBlock> blockList = BasicBlockParser.getInstance().getBasicLine(Lines.GREEN);
         int blockID = 62;
         boolean direction = true;
         for(int i = 0; i < 100; i++) {
@@ -124,19 +125,19 @@ public class WaysideControllerImplTests extends BaseTest {
         controller.maintenanceSetSwitch(13, true);
         assertTrue(controller.getBlockMap().get(13).getSwitchState());
         verify(trackModel).setSwitchState(13, true);
-        verify(ctcOffice).setSwitchState(true, 13, true);
+        verify(ctcOffice).setSwitchState(Lines.GREEN, 13, true);
 
         assertFalse(controller.getBlockMap().get(13).getLightState());
         controller.maintenanceSetTrafficLight(13, true);
         assertTrue(controller.getBlockMap().get(13).getLightState());
         verify(trackModel).setLightState(13, true);
-        verify(ctcOffice).setLightState(true, 13, true);
+        verify(ctcOffice).setLightState(Lines.GREEN, 13, true);
 
         assertFalse(controller.getBlockMap().get(13).getCrossingState());
         controller.maintenanceSetCrossing(13, true);
         assertTrue(controller.getBlockMap().get(13).getCrossingState());
         verify(trackModel).setCrossing(13, true);
-        verify(ctcOffice).setCrossingState(true, 13, true);
+        verify(ctcOffice).setCrossingState(Lines.GREEN, 13, true);
     }
 
     @Test

@@ -22,12 +22,17 @@ public class Constants {
     final public static boolean RED_LINE = false;
     final public static boolean GREEN_LINE = true;
 
+    //Time Step Interval
+    final public static double TIME_STEP_MS = 125;
+    final public static double TIME_STEP_S = TIME_STEP_MS / 1000;
+
     final public static Direction YARD_OUT_DIRECTION = Direction.NORTH;
 
     final public static int YARD_OUT_BLOCK = 0;
 
     //Physics Constants
     final public static double GRAVITY = 9.81; // m/s^2
+
 
     final public static double SERVICE_BRAKE_DECELERATION = 1.2; // m/s^2
     final public static double SERVICE_BRAKE_FORCE = 61724; // N
@@ -41,8 +46,13 @@ public class Constants {
     final public static double LOADED_TRAIN_MASS = 51437.37; // kg
     final public static double PASSENGER_MASS = 83.9146; // kg
     final public static double MAX_SPEED = 19.44; // m/s
-    final public static double MAX_POWER = 480.0; // kW
+    final public static double MAX_POWER_KW = 480.0; // kW
+    final public static double MAX_POWER_W = MAX_POWER_KW * 1000; // W
+    final public static double MAX_POWER_HP = MAX_POWER_W / 745.7; // HP
     final public static double MAX_ENGINE_FORCE = 40000; //N
     final public static int MAX_PASSENGERS = 222;
+
+    public static final int STOP_TRAIN_SIGNAL = -2;
+    public static final int RESUME_TRAIN_SIGNAL = -3;
 }
 

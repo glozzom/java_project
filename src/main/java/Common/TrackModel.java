@@ -1,5 +1,6 @@
 package Common;
 
+import Utilities.Enums.Lines;
 public interface TrackModel {
 
     //Vital Setters
@@ -16,6 +17,7 @@ public interface TrackModel {
     void setBrokenRail(Integer blockID, boolean state);
     void setPowerFailure(Integer blockID, boolean state);
     void setTrackCircuitFailure(Integer blockID, boolean state);
+    void fixTrackFailure(Integer blockID);
 
     //Failure Getters
     boolean getBrokenRail(Integer blockID);
@@ -24,8 +26,10 @@ public interface TrackModel {
 
 
     //Non-Vitals
-    void setPassengersDisembarked(TrainModel train, int disembarked);
-    int getPassengersEmbarked(TrainModel train);
+    void disembarkPassengers(TrainModel train, int disembarked);
+    int embarkPassengers(TrainModel train);
     int getTicketSales();
+
+    Lines getLine();
 
 }

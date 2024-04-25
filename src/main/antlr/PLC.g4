@@ -3,7 +3,7 @@ grammar PLC;
 program : (statement | statement NEWLINE | NEWLINE)+;
 statement : set_list_value | if_statement | if_else_statement | for_statement ;
 
-set_list_value : list_name '[' index ']' '=' (equality_check | compound_value | value_false | value_true) ;
+set_list_value : list_name '[' (int_val | int_variable | arith_expression) ']' '=' (equality_check | compound_value | value_false | value_true) ;
 
 if_statement
     : IF (compound_value | equality_check)
@@ -17,7 +17,7 @@ if_else_statement
     NEWLINE ENDIF ;
 
 for_statement
-    : FOR VARIABLE '=' index TO index DO
+    : FOR VARIABLE '=' (int_val | int_variable | arith_expression) TO (int_val | int_variable | arith_expression) DO
     NEWLINE (statement | statement NEWLINE | NEWLINE)+
     NEWLINE ENDFOR ;
 
@@ -32,15 +32,16 @@ or_operator: (and_operator | single_val | ('(' compound_value ')')) (OR (and_ope
 and_operator: (single_val | ('(' compound_value ')')) (AND (single_val | ('(' compound_value ')')))+ ;
 single_val : not_operator | list_value ;
 not_operator : NOT list_value ;
-list_value : list_name '[' index ']' ;
-index : int_val | int_variable | arith_expression ;
+list_value : list_name '[' (int_val | int_variable | arith_expression) ']' ;
 arith_expression : (int_val | int_variable) ARITH_OP (int_val | int_variable) ;
 int_val : INT_VAL ;
-int_variable : VARIABLE ;
+int_variable : VARIABLE  ;
 list_name : (OCCUPANCY | SWITCH | LIGHT | CROSSING | AUTHORITY | DIRECTION | DIR_ASSIGNED) ;
 value_false : FALSE | RED | MAIN | CLOSED | SOUTHBOUND ;
 value_true : TRUE | GREEN | ALT | OPEN | NORTHBOUND ;
 
+
+END : 'end' | 'END' ;
 AND : 'and' | 'AND' ;
 OR : 'or' | 'OR' ;
 NOT : 'not' | 'NOT' ;
@@ -52,7 +53,7 @@ ENDFOR : 'endfor' | 'ENDFOR' ;
 COMMENT : '//' ~( '\r' | '\n' )* NEWLINE -> skip ;
 TO : 'to' | 'TO' ;
 DO : 'do' | 'DO' ;
-END : 'end' | 'END' ;
+
 
 OCCUPANCY : 'occupied' ;
 SWITCH : 'switch' ;

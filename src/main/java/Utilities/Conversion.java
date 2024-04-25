@@ -23,8 +23,19 @@ public class Conversion {
         FPS2
     }
     public enum powerUnits {
+        KILOWATTS,
         WATTS,
         HORSEPOWER
+    }
+    public enum massUnits {
+        KILOGRAMS,
+        POUNDS,
+        TONS
+    }
+    public enum timeUnits {
+        SECONDS,
+        MINUTES,
+        HOURS
     }
 
     public static double convertDistance(double distance, distanceUnit from, distanceUnit to) {
@@ -185,10 +196,82 @@ public class Conversion {
             if (to == powerUnits.HORSEPOWER) {
                 return power / 745.7;
             }
+            if(to == powerUnits.KILOWATTS){
+                return power / 1000;
+            }
         }
         if (from == powerUnits.HORSEPOWER) {
             if (to == powerUnits.WATTS) {
                 return power * 745.7;
+            }
+            if(to == powerUnits.KILOWATTS){
+                return power * 0.7457;
+            }
+        }
+        if(from == powerUnits.KILOWATTS){
+            if(to == powerUnits.WATTS){
+                return power * 1000;
+            }
+            if(to == powerUnits.HORSEPOWER){
+                return power * 1.34102;
+            }
+        }
+        return 0;
+    }
+
+    public static double convertMass(double mass, massUnits from, massUnits to) {
+        if (from == to) {
+            return mass;
+        }
+        if (from == massUnits.KILOGRAMS) {
+            if (to == massUnits.POUNDS) {
+                return mass * 2.20462;
+            }
+        }
+        if (from == massUnits.POUNDS) {
+            if (to == massUnits.KILOGRAMS) {
+                return mass / 2.20462;
+            }
+        }
+        if (from == massUnits.TONS) {
+            if (to == massUnits.KILOGRAMS) {
+                return mass / 907.185;
+            }
+        }
+        if (from == massUnits.KILOGRAMS) {
+            if (to == massUnits.TONS) {
+                return mass / 907.185;
+            }
+        }
+        return 0;
+    }
+
+    public static double convertTime(double time, timeUnits from, timeUnits to) {
+        if (from == to) {
+            return time;
+        }
+        if (from == timeUnits.SECONDS) {
+            if (to == timeUnits.MINUTES) {
+                return time / 60;
+            }
+            if (to == timeUnits.HOURS) {
+                return time / 3600;
+            }
+        }
+        if (from == timeUnits.MINUTES) {
+            if (to == timeUnits.SECONDS) {
+                return time * 60;
+            }
+            if (to == timeUnits.HOURS) {
+                return time / 60;
+            }
+        }
+        if (from == timeUnits.HOURS) {
+            if (to == timeUnits.SECONDS) {
+                return time * 3600;
+            }
+            if (to == timeUnits.MINUTES) {
+                return time * 60;
             }
         }
         return 0;

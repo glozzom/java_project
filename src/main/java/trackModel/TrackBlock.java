@@ -6,16 +6,21 @@ import Utilities.Enums.Direction;
 import Utilities.Enums.Lines;
 import Utilities.Records.BasicBlock;
 import Utilities.Records.BasicBlock.Connection;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import trackModel.BlockTypes.*;
+import trainModel.NullTrain;
 
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import static Utilities.Enums.Direction.NORTH;
+
 
 public class TrackBlock {
     // Block Information
      final int blockID;
      final boolean isUnderground;
      final boolean isSwitch;
+     final boolean isLight;
+     boolean isBeacon;
      final BlockType blockType;
      final Lines line;
 
@@ -39,7 +44,10 @@ public class TrackBlock {
      boolean powerFailure;
      boolean occupied;
      TrainModel occupiedBy;
-    private static final Logger logger = Logger.getLogger(TrackBlock.class.getName());
+
+     NullTrain nullTrain = new NullTrain();
+
+    private static final Logger logger = LoggerFactory.getLogger(TrackBlock.class);
 
      BlockFeature feature;
 
@@ -48,39 +56,23 @@ public class TrackBlock {
      *
      * @throws IllegalArgumentException if the provided block information is invalid
      */
-    public TrackBlock(){
-        this.blockID = 0;
-        this.isUnderground = false;
-        this.isSwitch = false;
-        this.blockType = BlockType.REGULAR;
-        this.grade = 0;
-        this.elevation = 0;
-        this.cumulativeElevation = 0;
-        this.speedLimit = 0;
-        this.length = 0;
-        this.line = Lines.GREEN;
-        this.northConnect = null;
-        this.southConnect = null;
-        this.feature = new StandardBlock();
-        this.hasFailure = false;
-        this.brokenRail = false;
-        this.trackCircuitFailure = false;
-        this.powerFailure = false;
-    }
 
-    TrackBlock(BasicBlock blockInfo) {
+
+    public TrackBlock(BasicBlock blockInfo) {
         validateBlockInfo(blockInfo);
 
         this.blockID = blockInfo.blockNumber();
         this.isUnderground = blockInfo.isUnderground();
         this.isSwitch = blockInfo.isSwitch();
+        this.isLight = blockInfo.isLight();
         this.blockType = blockInfo.blockType();
         this.grade = blockInfo.blockGrade();
         this.elevation = blockInfo.elevation();
         this.cumulativeElevation = blockInfo.cumulativeElevation();
         this.speedLimit = blockInfo.speedLimit();
         this.length = blockInfo.blockLength();
-        this.line =blockInfo.trackLine();
+        this.line = blockInfo.trackLine();
+//        this.isBeacon = blockInfo.isBeacon();
 
 
         if (isSwitch && blockType == BlockType.STATION) {
@@ -109,25 +101,105 @@ public class TrackBlock {
         this.brokenRail = false;
         this.trackCircuitFailure = false;
         this.powerFailure = false;
+        this.maintenanceMode = false;
+        this.lightState = false;
+        this.authority = 0;
+        this.commandSpeed = 0;
+        this.occupied = false;
+        this.occupiedBy = nullTrain;
     }
 
-    public void setFailure(boolean brokenRail, boolean trackCircuitFailure, boolean powerFailure) {
-        this.brokenRail = brokenRail;
-        this.trackCircuitFailure = trackCircuitFailure;
-        this.powerFailure = powerFailure;
-        this.hasFailure = brokenRail || trackCircuitFailure || powerFailure;
+    /**
+     * Constructs a new TrackBlock object with default values.
+     */
+    public TrackBlock(){
+        this.blockID = 0;
+        this.isUnderground = false;
+        this.isSwitch = false;
+        this.isLight = false;
+        this.blockType = BlockType.REGULAR;
+        this.grade = 0;
+        this.elevation = 0;
+        this.cumulativeElevation = 0;
+        this.speedLimit = 0;
+        this.length = 0;
+        this.line = Lines.GREEN;
+        this.northConnect = null;
+        this.southConnect = null;
+        this.feature = new StandardBlock();
+        this.hasFailure = false;
+        this.brokenRail = false;
+        this.trackCircuitFailure = false;
+        this.powerFailure = false;
+        this.maintenanceMode = false;
+        this.lightState = false;
+        this.authority = 0;
+        this.commandSpeed = 0;
+        this.occupied = false;
+        this.occupiedBy = nullTrain;
     }
 
     public boolean hasFailure() {
         return brokenRail || trackCircuitFailure || powerFailure;
     }
 
-     Connection getNextBlock(Direction direction) {
+     void clearFailures() {
+         brokenRail = false;
+         trackCircuitFailure = false;
+         powerFailure = false;
+         hasFailure = false;
+     }
+
+
+     void setCircuitFailure(boolean trackCircuitFailure) {
+        this.trackCircuitFailure = trackCircuitFailure;
+        this.hasFailure = brokenRail || trackCircuitFailure || powerFailure;
+    }
+
+     void setPowerFailure(boolean powerFailure) {
+        this.powerFailure = powerFailure;
+        this.hasFailure = brokenRail || trackCircuitFailure || powerFailure;
+    }
+
+     void setRailFailure(boolean brokenRail) {
+        this.brokenRail = brokenRail;
+        this.hasFailure = brokenRail || trackCircuitFailure || powerFailure;
+    }
+
+    void setBeacon(boolean hasBeacon) {
+        this.isBeacon = hasBeacon;
+    }
+
+
+    public boolean hasBrokenRail() {
+        return brokenRail;
+    }
+
+    public boolean hasCircuitFailure() {
+        return trackCircuitFailure;
+    }
+
+    public boolean hasPowerFailure() {
+        return powerFailure;
+    }
+
+
+     public Integer getNextBlock(Direction direction) {
+        Connection nextConnection;
         if (isSwitch) {
-            return feature.getNextBlock(direction);
+             nextConnection = feature.getNextBlock(direction);
         } else {
-            return (direction == Direction.NORTH) ? northConnect : southConnect;
+            nextConnection = (direction == NORTH) ? northConnect : southConnect;
         }
+        if(nextConnection.directionChange()){
+            if(occupiedBy != nullTrain) {
+                this.occupiedBy.changeDirection();
+            }else{
+                nullTrain.changeDirection();
+                logger.warn("Tried to change direction of NullTrain at block: {}", blockID);
+            }
+        }
+        return nextConnection.blockNumber();
     }
 
     public double getLength() {
@@ -143,11 +215,37 @@ public class TrackBlock {
     }
 
     public void setAuthority(int authority) {
-        this.authority = authority;
+        if(occupiedBy != nullTrain) {
+            this.occupiedBy.setAuthority(authority);
+            this.authority = authority;
+        }else{
+            logger.warn("TrackBlock: {} is not occupied, cannot set authority", blockID);
+        }
     }
 
     public void setCommandSpeed(double commandSpeed) {
-        this.commandSpeed = commandSpeed;
+        if(occupiedBy != nullTrain){
+            this.occupiedBy.setCommandSpeed(commandSpeed);
+            this.commandSpeed = commandSpeed;
+        }else{
+            logger.warn("TrackBlock: {} is not occupied, cannot set command speed", blockID);
+        }
+    }
+
+    void addOccupation(TrainModel train){
+        if(!occupied){
+            this.occupied = true;
+            occupiedBy = train;
+            logger.info("TrackBlock {} <= T{}",blockID, occupiedBy.getTrainNumber());
+
+        }else{
+            logger.warn("TrackBlock: {} is already occupied by Train: {} ", blockID,  occupiedBy.getTrainNumber());
+        }
+    }
+
+    void removeOccupation(){
+        this.occupied = false;
+        this.occupiedBy = nullTrain;
     }
 
     public void setUnderMaintenance (boolean state){
@@ -157,6 +255,8 @@ public class TrackBlock {
     public boolean isSwitch() {
         return isSwitch;
     }
+
+    public boolean isLight() {return isLight;}
 
     public boolean isStation() {
         return blockType == BlockType.STATION;
@@ -223,14 +323,18 @@ public class TrackBlock {
     }
 
     public TrainModel getOccupiedBy() {
-        return occupiedBy;
+        if(occupiedBy != null){
+            return occupiedBy;
+        }else{
+            return nullTrain;
+        }
     }
 
     String getStationName() {
         if (feature.isStation()) {
             return feature.getStationName();
         } else {
-            logger.log(Level.SEVERE, generateLogMessage("getStationName", "station"));
+            logger.warn(generateLogMessage("getStationName", "station"));
             return null;
         }
     }
@@ -239,8 +343,8 @@ public class TrackBlock {
         if (feature.isStation()) {
             return feature.getDoorDirection();
         } else {
-            logger.log(Level.SEVERE, generateLogMessage("getDoorDirection", "station"));
-            return null;
+            logger.warn(generateLogMessage("getDoorDirection", "station"));
+            return "";
         }
     }
 
@@ -248,7 +352,7 @@ public class TrackBlock {
         if (feature.isStation()) {
             return feature.getPassengersWaiting();
         } else {
-            logger.log(Level.SEVERE, generateLogMessage("getPassengersWaiting", "station"));
+            logger.warn(generateLogMessage("getPassengersWaiting", "station"));
             return 0;
         }
     }
@@ -257,7 +361,7 @@ public class TrackBlock {
         if (feature.isStation()) {
             feature.setPassengersWaiting(passengersWaiting);
         } else {
-            logger.log(Level.SEVERE, generateLogMessage("setPassengersWaiting", "station"));
+            logger.warn(generateLogMessage("setPassengersWaiting", "station"));
         }
     }
 
@@ -265,7 +369,7 @@ public class TrackBlock {
         if (feature.isStation()) {
             return feature.getPassengersEmbarked();
         } else {
-            logger.log(Level.SEVERE, generateLogMessage("getPassengersEmbarked", "station"));
+            logger.warn(generateLogMessage("getPassengersEmbarked", "station"));
             return 0;
         }
     }
@@ -274,7 +378,7 @@ public class TrackBlock {
         if (feature.isStation()) {
             feature.setPassengersEmbarked(passengersEmbarked);
         } else {
-            logger.log(Level.SEVERE, generateLogMessage("setPassengersEmbarked", "station"));
+            logger.warn( generateLogMessage("setPassengersEmbarked", "station"));
         }
     }
 
@@ -282,7 +386,7 @@ public class TrackBlock {
         if (feature.isStation()) {
             return feature.getPassengersDisembarked();
         } else {
-            logger.log(Level.SEVERE, generateLogMessage("getPassengersDisembarked", "station"));
+            logger.warn(generateLogMessage("getPassengersDisembarked", "station"));
             return 0;
         }
     }
@@ -291,7 +395,7 @@ public class TrackBlock {
         if (feature.isStation()) {
             feature.setPassengersDisembarked(passengersDisembarked);
         } else {
-            logger.log(Level.SEVERE, generateLogMessage("setPassengersDisembarked", "station"));
+            logger.warn( generateLogMessage("setPassengersDisembarked", "station"));
         }
     }
 
@@ -299,7 +403,7 @@ public class TrackBlock {
         if (feature.isSwitch()) {
             feature.setSwitchState(state);
         } else {
-            logger.log(Level.SEVERE, generateLogMessage("setSwitchState", "switch"));
+            logger.warn(generateLogMessage("setSwitchState", "switch"));
         }
     }
 
@@ -307,7 +411,7 @@ public class TrackBlock {
         if (feature.isSwitch()) {
             return feature.getSwitchState();
         } else {
-            logger.log(Level.SEVERE, generateLogMessage("getSwitchState", "switch"));
+            logger.warn( generateLogMessage("getSwitchState", "switch"));
             return false;
         }
     }
@@ -316,7 +420,7 @@ public class TrackBlock {
         if (feature.isSwitch()) {
             return feature.getAutoState();
         } else {
-            logger.log(Level.SEVERE, generateLogMessage("getSwitchStateAuto", "switch"));
+            logger.warn( generateLogMessage("getSwitchStateAuto", "switch"));
             return false;
         }
     }
@@ -325,7 +429,7 @@ public class TrackBlock {
         if (feature.isSwitch()) {
             feature.setSwitchStateAuto(state);
         } else {
-            logger.log(Level.SEVERE, generateLogMessage("setSwitchStateAuto", "switch"));
+            logger.warn( generateLogMessage("setSwitchStateAuto", "switch"));
         }
     }
 
@@ -333,7 +437,7 @@ public class TrackBlock {
         if (feature.isCrossing()) {
             feature.setCrossingState(state);
         } else {
-            logger.log(Level.SEVERE, generateLogMessage("setCrossingState", "crossing"));
+            logger.warn( generateLogMessage("setCrossingState", "crossing"));
         }
     }
 
@@ -341,7 +445,7 @@ public class TrackBlock {
         if (feature.isCrossing()) {
             return feature.getCrossingState();
         } else {
-            logger.log(Level.SEVERE, generateLogMessage("getCrossingState", "crossing"));
+            logger.warn( generateLogMessage("getCrossingState", "crossing"));
             return false;
         }
     }
@@ -365,5 +469,9 @@ public class TrackBlock {
 
     private String generateLogMessage(String methodName, String blockType) {
         return methodName + " called on Block: " + this.blockID + ", which is not a " + blockType + " block";
+    }
+
+    public boolean isBeacon() {
+        return false;
     }
 }

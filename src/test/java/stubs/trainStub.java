@@ -2,11 +2,17 @@ package stubs;
 
 import Common.TrainController;
 import Common.TrainModel;
+import Utilities.BasicTrackMap;
+import Utilities.HelperObjects.BasicTrackLine;
 import Utilities.Enums.Direction;
+import Utilities.Enums.Lines;
+import Utilities.BasicBlockParser;
 import Utilities.Records.Beacon;
-import Utilities.Records.UpdatedTrainValues;
+import trainModel.Records.UpdatedTrainValues;
 import trackModel.TrackBlock;
 import trackModel.TrackLine;
+import trainController.TrainControllerImpl;
+
 
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -47,15 +53,23 @@ public class trainStub implements TrainModel {
 
     TrackLine track;
     TrackBlock currentBlock;
+    BasicTrackMap trackMap = BasicBlockParser.getInstance().getAllBasicLines();
+    BasicTrackLine basicTrackLine = trackMap.get(Lines.GREEN);
 
     public trainStub(TrackLine track, int trainID) {
         this.trainID = trainID;
         this.track = track;
-        this.currentBlock = track.getTrack().get(0);
+
         this.controller = new trainControllerStub(this, trainID);
         initializeValues();
+    }
 
+    public trainStub() {
+        this.trainID = 1;
+        this.track = new TrackLine(Lines.GREEN);
 
+        this.controller = new TrainControllerImpl(this, trainID);
+        initializeValues();
     }
 
     public TrackBlock getCurrentBlock() {
@@ -91,7 +105,7 @@ public class trainStub implements TrainModel {
     }
 
     public void go_Brr(){
-        for(int i = 0; i < track.getTrack().size(); i++) {
+        for(int i = 0; i < 60; i++) {
             updateLocation(currentBlock.getLength()-0.001);
         }
     }
@@ -103,6 +117,11 @@ public class trainStub implements TrainModel {
     @Override
     public void delete() {
 
+    }
+
+    @Override
+    public boolean isDeleted() {
+        return false;
     }
 
     @Override
@@ -344,6 +363,11 @@ public class trainStub implements TrainModel {
     }
 
     @Override
+    public void updatePassengers() {
+
+    }
+
+    @Override
     public double getDistanceTraveled() {
         return distanceTraveled;
     }
@@ -366,5 +390,10 @@ public class trainStub implements TrainModel {
     @Override
     public void trainModelPhysics() {
 
+    }
+
+    @Override
+    public Lines getLine() {
+        return null;
     }
 }

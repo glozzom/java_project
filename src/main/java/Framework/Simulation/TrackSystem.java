@@ -1,44 +1,46 @@
 package Framework.Simulation;
 
-import Utilities.BasicLineMap;
-import Utilities.ParsedBasicBlocks;
+import Common.TrainModel;
+import Utilities.BasicBlockParser;
 import Utilities.Enums.Lines;
+import Utilities.HelperObjects.TrackLineMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import trackModel.TrackLine;
-import trackModel.TrackLineMap;
 
-import java.util.concurrent.*;
+import java.util.HashSet;
 
 public class TrackSystem {
 
-    /**
-     * RED   -> {TrackLine}
-     * GREEN -> {TrackLine}
-     * ....
-     */
-    private final ExecutorService trackLineExecutor;
+    private static final Logger logger = LoggerFactory.getLogger(TrackSystem.class);
+    private static final BasicBlockParser blockParser = BasicBlockParser.getInstance();
+    private static final HashSet<Lines> lines = blockParser.getLines();
 
-    public TrackSystem() {
-        ParsedBasicBlocks parsedBasicBlocks = ParsedBasicBlocks.getInstance();
-        BasicLineMap basicLines = parsedBasicBlocks.getAllBasicLines();
-        trackLineExecutor = Executors.newFixedThreadPool(basicLines.size());
-        for (Lines line : Lines.values()) {
-            TrackLineMap.addTrackLine(line, new TrackLine(line, basicLines.get(line)));
+
+    private static TrainSystem trainSystem;
+
+    public TrackSystem(TrainSystem trainSystem) {
+        TrackSystem.trainSystem = trainSystem;
+
+        for (Lines line : lines) {
+            if(line.equals(Lines.NULL)){
+                continue;
+            }
+            TrackLineMap.addTrackLine(line, new TrackLine(line));
+            logger.info("TrackLine {} has been added to the TrackLineMap", line);
         }
     }
 
+
     public void dispatchTrain(Lines line, int trainID) {
-        TrackLineMap.getTrackLine(line).trainDispatch(trainID);
+        TrainModel newTrain = TrackLineMap.getTrackLine(line).trainDispatch(trainID);
+        trainSystem.addTrainProcess(newTrain);
     }
 
     public void update() {
-        trackLineExecutor.submit(() -> {
-            for (TrackLine line : TrackLineMap.getValues()) {
-                try {
-                    line.update();
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        });
+        for (TrackLine line : TrackLineMap.getValues()) {
+            line.update();
+        }
     }
+
 }

@@ -1,8 +1,9 @@
 package Common;
 
 import Utilities.Enums.Direction;
+import Utilities.Enums.Lines;
 import Utilities.Records.Beacon;
-import Utilities.Records.UpdatedTrainValues;
+import trainModel.Records.UpdatedTrainValues;
 
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -10,6 +11,7 @@ import java.util.concurrent.Future;
 public interface  TrainModel {
 
     void delete();
+    boolean isDeleted();
     //----Vital Setter Signals----
     void setEmergencyBrake(boolean brake);
     void setServiceBrake(boolean brake);
@@ -73,7 +75,7 @@ public interface  TrainModel {
     int getNumCars();
 
 
-
+    void updatePassengers();
 
     //Vital Functions for simulating the train physics
     void setValue(String propertyName, Object newValue);
@@ -86,4 +88,6 @@ public interface  TrainModel {
 
     void trainModelTimeStep(Future<UpdatedTrainValues> updatedTrainValuesFuture) throws ExecutionException, InterruptedException;
     void trainModelPhysics() throws ExecutionException, InterruptedException;
+
+    Lines getLine();
 }

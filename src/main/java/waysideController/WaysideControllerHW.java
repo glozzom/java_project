@@ -1,8 +1,8 @@
 package waysideController;
 
-import Utilities.ParsedBasicBlocks;
-import Utilities.Records.BasicBlock;
 import Utilities.Enums.Lines;
+import Utilities.BasicBlockParser;
+import Utilities.Records.BasicBlock;
 import com.fazecast.jSerialComm.SerialPort;
 
 import java.io.*;
@@ -10,6 +10,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Stack;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 public class WaysideControllerHW implements PLCRunner {
 
@@ -48,7 +50,7 @@ public class WaysideControllerHW implements PLCRunner {
     public void setSwitchPLC(int blockID, boolean switchState) {
         WaysideBlock block = blockMap.get(blockID);
 
-        if(block.isOpen() && block.getSwitchState() != switchState) {
+        if(!block.inMaintenance() && block.getSwitchState() != switchState) {
             currentPLCResult.push(new PLCChange("switch", blockID, switchState));
 //            block.setSwitchState(switchState);
 //            System.out.println("Send: switchState="+blockID+":"+switchState);
@@ -70,7 +72,7 @@ public class WaysideControllerHW implements PLCRunner {
     public void setTrafficLightPLC(int blockID, boolean lightState) {
         WaysideBlock block = blockMap.get(blockID);
 
-        if(block.isOpen() && block.getSwitchState() != lightState) {
+        if(!block.inMaintenance() && block.getLightState() != lightState) {
             currentPLCResult.push(new PLCChange("light", blockID, lightState));
 //            block.setSwitchState(lightState);
 //            System.out.println("Send: trafficLight=" + blockID + ":" + lightState);
@@ -92,7 +94,7 @@ public class WaysideControllerHW implements PLCRunner {
     public void setCrossingPLC(int blockID, boolean crossingState) {
         WaysideBlock block = blockMap.get(blockID);
 
-        if(block.isOpen() && block.getSwitchState() != crossingState) {
+        if(!block.inMaintenance() && block.getCrossingState() != crossingState) {
             currentPLCResult.push(new PLCChange("crossing", blockID, crossingState));
 //            block.setSwitchState(crossingState);
 //            System.out.println("Send: crossing=" + blockID + ":" + crossingState);
@@ -110,7 +112,7 @@ public class WaysideControllerHW implements PLCRunner {
     public void setAuthorityPLC(int blockID, boolean auth) {
         WaysideBlock block = blockMap.get(blockID);
 
-        if(block.isOpen() && block.getBooleanAuth() != auth) {
+        if(!block.inMaintenance() && block.getBooleanAuth() != auth) {
             currentPLCResult.push(new PLCChange("auth", blockID, auth));
 //            block.setSwitchState(auth);
 //            System.out.println("Send: auth=" + blockID + ":" + auth);
@@ -133,6 +135,11 @@ public class WaysideControllerHW implements PLCRunner {
     }
 
     @Override
+    public boolean getOutsideSwitch(int blockID) {
+        return false;
+    }
+
+    @Override
     public Map<Integer, WaysideBlock> getBlockMap() {
         return blockMap;
     }
@@ -140,7 +147,7 @@ public class WaysideControllerHW implements PLCRunner {
     private void setupBlocks(int[] blockIDList, String trackLine) {
         blockMap.clear();
         // Parse the CSV file to get the blocks that the wayside controls
-        ConcurrentSkipListMap<Integer, BasicBlock> blockList = ParsedBasicBlocks.getInstance().getBasicLine(Lines.valueOf(trackLine));
+        ConcurrentSkipListMap<Integer, BasicBlock> blockList = BasicBlockParser.getInstance().getBasicLine(Lines.valueOf(trackLine));
         for(int blockID : blockIDList) {
             WaysideBlock block = new WaysideBlock(blockList.get(blockID));
             blockMap.put(blockID, block);
@@ -148,7 +155,9 @@ public class WaysideControllerHW implements PLCRunner {
     }
 
     protected void parseCOMMessage(String message) {
-        System.out.println("Received: " + message);
+        if(!message.equals("runPLC"))
+            System.out.println("Received: " + message);
+
         String[] values = message.split("=", 2);
 
         switch (values[0]) {
@@ -180,10 +189,6 @@ public class WaysideControllerHW implements PLCRunner {
             case "maintenanceMode" -> {
                 maintenanceMode = Boolean.parseBoolean(values[1]);
             }
-            case "blockMaintenance" -> {
-                String[] setValues = values[1].split(":");
-                blockMap.get(Integer.parseInt(setValues[0])).setBlockMaintenanceState(Boolean.parseBoolean(setValues[1]));
-            }
             case "occupancy" -> {
                 String[] setValues = values[1].split(":");
                 blockMap.get(Integer.parseInt(setValues[0])).setOccupied(Boolean.parseBoolean(setValues[1]));
@@ -200,10 +205,6 @@ public class WaysideControllerHW implements PLCRunner {
                 String[] setValues = values[1].split(":");
                 blockMap.get(Integer.parseInt(setValues[0])).setLightState(Boolean.parseBoolean(setValues[1]));
             }
-            case "speed" -> {
-                String[] setValues = values[1].split(":");
-                blockMap.get(Integer.parseInt(setValues[0])).setSpeed(Double.parseDouble(setValues[1]));
-            }
             case "auth" -> {
                 String[] setValues = values[1].split(":");
                 blockMap.get(Integer.parseInt(setValues[0])).setBooleanAuth(Boolean.parseBoolean(setValues[1]));
@@ -212,6 +213,9 @@ public class WaysideControllerHW implements PLCRunner {
                 if(!maintenanceMode && !blockMap.isEmpty() && plcPrograms[0] != null) {
                     runPLC();
                 }
+            }
+            case "ping" -> {
+                outputStream.println("WaysideHW");
             }
         }
     }
@@ -246,17 +250,25 @@ public class WaysideControllerHW implements PLCRunner {
                 default -> throw new RuntimeException("Invalid PLC change type");
             }
         }
+
+        outputStream.println("ready");
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {
-
+        Executor executor = Executors.newSingleThreadExecutor();
         System.out.println("Starting Wayside Controller");
         WaysideControllerHW controller = new WaysideControllerHW("/dev/ttyS0");
 
-        while (true) {
-            if (controller.bufferedReader.ready()) {
-                controller.parseCOMMessage(controller.bufferedReader.readLine());
+        executor.execute(() ->{
+            while (true) {
+                try {
+                    if (controller.bufferedReader.ready()) {
+                        controller.parseCOMMessage(controller.bufferedReader.readLine());
+                    }
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
             }
-        }
+        });
     }
 }

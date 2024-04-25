@@ -1,20 +1,29 @@
 package Framework.GUI;
 
+import Framework.Simulation.Main;
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
+import javafx.scene.control.MenuBar;
 import javafx.scene.control.*;
 import javafx.scene.input.MouseButton;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
+import java.awt.*;
 import java.net.URL;
 
 public class mainMenu extends Application {
 
     String[] tabNames = {"CTC_Main_UI", "trackModel", "waysideController", "trainModel", "trainController"};
+
+    public static Label timeLabel = new Label("Time: 6:00:00");
+    public static Label timeScaleLabel = new Label("1.0x Speed");
 
     @Override
     public void start(Stage primaryStage) {
@@ -30,16 +39,10 @@ public class mainMenu extends Application {
             Button tabButton = new Button(tabNames[i]);
             final int moduleId = i;
 
-//            // Right-click menu for opening in a new window
-//          ContextMenu contextMenu = new ContextMenu();
-//          MenuItem openInTab = new MenuItem("Open in tab.");
-//          openInTab.setOnAction(e -> openModuleTab(tabPane, tabNames[moduleId]));
-//          contextMenu.getItems().add(openInTab);
 
             // Consolidate event handling for right and left clicks
             tabButton.setOnMouseClicked(e -> {
                 if (e.getButton() == MouseButton.SECONDARY) {
-                    //contextMenu.show(tabButton, e.getScreenX(), e.getScreenY());
                     openModuleTab(tabPane, tabNames[moduleId]);
                 } else if (e.getButton() == MouseButton.PRIMARY) {
                     openInNewWindow(tabNames[moduleId]);
@@ -49,16 +52,37 @@ public class mainMenu extends Application {
             toolBar.getItems().add(tabButton);
         }
 
+        Slider speedSlider = new Slider(0.0, 10.0, 1);
+        speedSlider.setShowTickLabels(true);
+        speedSlider.setShowTickMarks(true);
+        speedSlider.setMajorTickUnit(2.0);
+        speedSlider.setOnMouseReleased(e -> Main.modifyTimeMultiplier(speedSlider.getValue()));
+        toolBar.getItems().add( speedSlider);
+
+        toolBar.getItems().add(timeLabel);
+        toolBar.getItems().add(timeScaleLabel);
+
         VBox topContainer = new VBox(); // Use VBox to stack MenuBar and ToolBar
         MenuBar menuBar = new MenuBar(); // If you still want to use MenuBar for other purposes
         topContainer.getChildren().addAll(menuBar, toolBar);
 
         root.setTop(topContainer);
+        Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+        int width = (int) (screenSize.getWidth() * 0.65);
+        int height = (int) (screenSize.getHeight() * 0.65);
 
-        Scene scene = new Scene(root);
+
+        Scene scene = new Scene(root,width,height);
         primaryStage.setScene(scene);
         primaryStage.setTitle("J.A.M.E.S - Train Management System");
         primaryStage.show();
+        mainMenu.timeScaleLabel.setText("Time Scale: " + Main.timeMultiplier + "x");
+    }
+
+    @Override
+    public void stop() {
+        Main.stopSimulation();
+        System.exit(0);
     }
 
     private void openModuleTab(TabPane tabPane, String moduleName) {
@@ -74,17 +98,18 @@ public class mainMenu extends Application {
         Node content = createModuleContent(moduleName); // This now loads from FXML
         Scene newScene;
         if(moduleName.equals("CTC_Main_UI")) {
-            newScene = new Scene(new VBox(content) , 900, 700);
+            newScene = new Scene(new VBox(content) , 1200, 700);
             newStage.setScene(newScene);
             newStage.setMinWidth(780);
             newStage.setMinHeight(700);
         }else {
-            newScene = new Scene(new VBox(content)); // Ensure the layout fits the loaded content
+            newScene = new Scene((Parent) content); // Ensure the layout fits the loaded content
             newStage.setScene(newScene);
         }
         newStage.setTitle(moduleName);
         newStage.show();
     }
+
 
     private Node createModuleContent(String moduleName) {
         try {

@@ -13,25 +13,33 @@ import javafx.scene.control.*;
 import javafx.scene.layout.AnchorPane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
-import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Text;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.*;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 
-import static trainController.Controller_Property.*;
+import static trainController.ControllerProperty.*;
 
 public class TrainControllerManager {
-
+    @FXML
+    public CheckBox HWTrainCheckBox;
+    public AnchorPane controllerStatusPane;
+    public AnchorPane stationStatusPane;
+    public AnchorPane cabinSettingsPane;
+    public AnchorPane speedControllerPane;
+    public AnchorPane brakePane;
+    public Button killTrain;
     @FXML
     AnchorPane masterTrainControllerPane;
     @FXML
     public TextArea statusLog;
     @FXML
     private Text nextStationText;
-    @FXML
-    private Rectangle stationInf, blockInfo;
     @FXML
     private CheckBox intLightCheckBox, extLightCheckBox, openDoorLeftCheckBox, openDoorRightCheckBox, toggleServiceBrakeCheckBox, autoModeCheckBox;
     @FXML
@@ -47,58 +55,70 @@ public class TrainControllerManager {
     @FXML
     private ChoiceBox<Integer> trainNoChoiceBox;
 
-    private TrainControllerSubjectMap subjectMap;
+    private final TrainControllerSubjectMap subjectMap = TrainControllerSubjectMap.getInstance();
+    private final TrainControllerSubject   nullSubject = NullController.getInstance().getSubject();
+
     private TrainControllerSubject currentSubject;
 
-    private final TrainControllerSubject nullSubject = new TrainControllerSubject();
     private final List<ListenerReference<?>> listenerReferences = new ArrayList<>();
+
+    private static final Logger logger = LoggerFactory.getLogger(TrainControllerManager.class);
+
+    private final ReentrantLock propertyChangeLock = new ReentrantLock();
+
+    private final ScheduledExecutorService textUpdateExecutor = Executors.newSingleThreadScheduledExecutor();
+
 
 
     @FXML
     public void initialize() {
-        System.out.println("Started Train Controller Manager Initialize");
+        logger.info("Started Train Controller Manager initialization");
 
-        subjectMap = TrainControllerSubjectMap.getInstance();
+        currentSubject = nullSubject; // Default to null object
         setupMapChangeListener();
-        trainNoChoiceBox.getSelectionModel().selectedItemProperty().addListener((obs,oldSelection,newSelection) ->{
-            if (newSelection != null){
-                changeTrainView(newSelection);
-            }else{
-                changeTrainView(oldSelection);
-            }
-        });
 
-//        if (!subjectMap.getSubjects().isEmpty()){
-//            changeTrainView(subjectMap.getSubjects().keySet().iterator().next());
-//        }else{
-//            System.out.println("No trains to display");
-//            statusLog.setText("No Trains to Display");
-//            currentSubject = nullSubject;
-//            updateAll();
-//        }
 
         if (!subjectMap.getSubjects().isEmpty()) {
+            updateChoiceBoxItems();
             Integer firstKey = subjectMap.getSubjects().keySet().iterator().next();
+            logger.info("Initialized Train Controller with train ID: {}", firstKey);
             changeTrainView(firstKey);
-            currentSubject = subjectMap.getSubject(firstKey);
-
-            //currentSubject.setProperty(AUTOMATIC_MODE_PROPERTY, true);
-        }else{
+        } else {
             statusLog.setText("No Trains Available");
+            logger.warn("No trains available to initialize Train Controller");
+            updateUIForNullSubject(); // Method to reset or initialize UI for null subject
         }
 
-
         trainNoChoiceBox.getSelectionModel().selectedItemProperty().addListener((obs, oldSelection, newSelection) -> {
-            if (newSelection != null) {
+            if(subjectMap.getSubjects().isEmpty()){
+                logger.warn("No controllers available to select");
+                changeTrainView(-1);
+            }
+            if(newSelection == null){
+                logger.warn("No selection made");
+                changeTrainView(oldSelection);
+            }else if (!subjectMap.getSubjects().containsKey(newSelection)) {
+                logger.warn("Selected train is not in the map");
+            }else{
                 changeTrainView(newSelection);
             }
         });
 
 
-        currentSubject.setProperty(AUTOMATIC_MODE.getPropertyName(), true);
+        HWTrainCheckBox.setOnAction(event -> {
+            if(TrainControllerFactory.getTrainLock()){
+                HWTrainCheckBox.setSelected(false);
+                logger.warn("Train Controller is locked, unable to change hardware mode");
+                return;
+            }
+
+            TrainControllerFactory.HWController = HWTrainCheckBox.isSelected();
+            logger.info("Hardware Train Controller set to {}", HWTrainCheckBox.isSelected());
+        });
 
         emergencyBrakeButton.setStyle("-fx-background-color: #ff3333; -fx-text-fill: #ffffff;");
     }
+
 
     private void setupMapChangeListener() {
         ObservableHashMap<Integer, TrainControllerSubject> subjects = subjectMap.getSubjects();
@@ -107,53 +127,156 @@ public class TrainControllerManager {
         ObservableHashMap.MapListener<Integer, TrainControllerSubject> genericListener = new ObservableHashMap.MapListener<>() {
             public void onAdded(Integer key, TrainControllerSubject value) {
                 updateChoiceBoxItems();
+                trainNoChoiceBox.getSelectionModel().select(value.getController().getID());
             }
             public void onRemoved(Integer key, TrainControllerSubject value) {
                 updateChoiceBoxItems();
+                if(subjects.isEmpty()) {
+                    changeTrainView(-1);
+                }else if(trainNoChoiceBox.getSelectionModel().getSelectedItem() == key){
+                    trainNoChoiceBox.getSelectionModel().selectFirst();
+                }
             }
             public void onUpdated(Integer key, TrainControllerSubject oldValue, TrainControllerSubject newValue) {
                 updateChoiceBoxItems();
             }
         };
-
         subjects.addChangeListener(genericListener);
-        updateChoiceBoxItems();
     }
 
 
     private void updateChoiceBoxItems() {
-        int previousSelection = trainNoChoiceBox.getSelectionModel().getSelectedIndex();
-            trainNoChoiceBox.setItems(FXCollections.observableArrayList(new ArrayList<>(subjectMap.getSubjects().keySet())));
-            trainNoChoiceBox.getSelectionModel().select(previousSelection);
+        List<Integer> trainIDs = new ArrayList<>(subjectMap.getSubjects().keySet());
+
+       Platform.runLater(()-> {trainNoChoiceBox.setItems(FXCollections.observableArrayList(trainIDs));
+
+        if (!trainIDs.isEmpty()) {
+            if(trainIDs.size() == 1){
+                trainNoChoiceBox.getSelectionModel().selectFirst();
+            }else {
+                Integer previousSelection = trainNoChoiceBox.getSelectionModel().getSelectedItem();
+                trainNoChoiceBox.getSelectionModel().select(previousSelection);
+            }
+        } else {
+            logger.info("No trains available after update.");
+            changeTrainView(-1); // Explicitly handle no selection
+        }
+        });
     }
 
+
+    private void changeTrainView(Integer trainID) {
+        logger.warn("Switching Train Controller to train ID: {}", trainID);
+            executeUpdate(() -> {
+                unbindControls();
+                if (trainID == -1 || !subjectMap.getSubjects().containsKey(trainID)) {
+                    currentSubject = NullController.getInstance().getSubject();
+                    updateUIForNullSubject();
+                    logger.info("Train Controller switched to null subject");
+                } else {
+                    currentSubject = subjectMap.getSubjects().get(trainID);
+                    updateView();
+                    logger.info("Train Controller switched to train ID: {}", trainID);
+                }
+            });
+    }
+
+    void executeUpdate(Runnable updateOperation) {
+        if (propertyChangeLock.tryLock()) {
+            try {
+                updateOperation.run();
+            } finally {
+                propertyChangeLock.unlock();
+            }
+        } else {
+            Platform.runLater(updateOperation);
+            logger.warn("Unable to acquire lock for update operation");
+        }
+    }
+
+    private void bindAll(){
+        bindControls();
+        bindGauges();
+        bindIndicators();
+    }
+
+
     private void bindGauges() {
-        currentSpeedGauge.valueProperty().bind(currentSubject.getDoubleProperty(CURRENT_SPEED));
-        commandedSpeedGauge.valueProperty().bind(currentSubject.getDoubleProperty(COMMAND_SPEED));
-        speedLimitGauge.valueProperty().bind(currentSubject.getDoubleProperty(SPEED_LIMIT));
-        authorityGauge.valueProperty().bind(currentSubject.getIntegerProperty(AUTHORITY));
-        currentTemperatureGauge.valueProperty().bind(currentSubject.getDoubleProperty(CURRENT_TEMPERATURE));
+        appendListener(currentSubject.getDoubleProperty(CURRENT_SPEED), (obs, oldVal, newVal) -> {
+            if(Math.abs(currentSpeedGauge.getValue() - newVal.doubleValue()) < 0.01) {return;} // Only update if there is a significant change (0.1 difference)
+            currentSpeedGauge.setValue(newVal.doubleValue());
+    //        logger.debug("Current speed gauge updated to {}", newVal);
+        });
+        appendListener(currentSubject.getDoubleProperty(COMMAND_SPEED), (obs, oldVal, newVal) -> {
+            if(Math.abs(oldVal.doubleValue() - newVal.doubleValue()) < 0.01) {return;} // Only update if there is a significant change (0.1 difference)
+            commandedSpeedGauge.setValue(newVal.doubleValue());
+    //        logger.debug("Commanded speed gauge updated to {}", newVal);
+        });
+        appendListener(currentSubject.getDoubleProperty(SPEED_LIMIT), (obs, oldVal, newVal) -> {
+            if(Math.abs(oldVal.doubleValue() - newVal.doubleValue()) < 0.01) {return;} // Only update if there is a significant change (0.1 difference)
+            speedLimitGauge.setValue(newVal.doubleValue());
+     //       logger.debug("Speed limit gauge updated to {}", newVal);
+        });
+        appendListener(currentSubject.getIntegerProperty(AUTHORITY), (obs, oldVal, newVal) -> {
+            authorityGauge.setValue(newVal.intValue());
+            logger.debug("Authority gauge updated to {}", newVal);
+        });
+        appendListener(currentSubject.getDoubleProperty(SET_TEMPERATURE), (obs, oldVal, newVal) -> {
+            if(Math.abs(currentTemperatureGauge.getValue() - newVal.doubleValue()) < 0.1) {return;} // Only update if there is a significant change (0.1 difference)
+            currentTemperatureGauge.setValue(newVal.doubleValue());
+    //        logger.debug("Current temperature gauge updated to {}", newVal);
+        });
         appendListener(currentSubject.getDoubleProperty(POWER), (obs, oldVal, newVal) -> {
+            if(Math.abs(powerOutputGauge.getValue() - newVal.doubleValue()) < 0.01) {return;} // Only update if there is a significant change (0.1 difference)
             double p = currentSubject.getDoubleProperty(POWER).get();
             powerOutputGauge.setValue(p);
+            if(Math.abs(oldVal.doubleValue() - newVal.doubleValue()) > 10){
+                logger.debug("Power output jumped to {} from {}", p, oldVal);
+            }
         });
     }
 
     private void bindIndicators() {
-        appendListener(currentSubject.getBooleanProperty(EMERGENCY_BRAKE), (obs, oldVal, newVal) -> Platform.runLater(() -> updateIndicator(Color.RED, eBrakeStatus, newVal)));
-        appendListener(currentSubject.getBooleanProperty(SIGNAL_FAILURE),(obs, oldVal, newVal) -> Platform.runLater(() -> updateIndicator(Color.RED, signalFailureStatus, newVal)));
-        appendListener(currentSubject.getBooleanProperty(BRAKE_FAILURE),(obs, oldVal, newVal) -> Platform.runLater(() -> updateIndicator(Color.RED, brakeFailureStatus, newVal)));
-        appendListener(currentSubject.getBooleanProperty(POWER_FAILURE),(obs, oldVal, newVal) -> Platform.runLater(() -> updateIndicator(Color.RED, powerFailureStatus, newVal)));
-        appendListener(currentSubject.getBooleanProperty(IN_TUNNEL),(obs, oldVal, newVal) ->     Platform.runLater(() -> {updateIndicator(Color.YELLOW, inTunnelStatus, newVal); inTunnelUpdates();}));
-        appendListener(currentSubject.getBooleanProperty(LEFT_PLATFORM),(obs, oldVal, newVal) -> Platform.runLater(() -> updateIndicator(Color.LIGHTGREEN, stationSideLeftStatus, newVal)));
-        appendListener(currentSubject.getBooleanProperty(RIGHT_PLATFORM),(obs, oldVal, newVal) -> Platform.runLater(() -> updateIndicator(Color.LIGHTGREEN, stationSideRightStatus, newVal)));
-        bindStringText(nextStationText, NEXT_STATION.getPropertyName());
+        appendListener(currentSubject.getBooleanProperty(EMERGENCY_BRAKE), (obs, oldVal, newVal) -> Platform.runLater(() -> {
+            updateIndicator(Color.RED, eBrakeStatus, newVal);
+   //         logger.info("Emergency brake status updated to {}", newVal);
+        }));
+        appendListener(currentSubject.getBooleanProperty(SIGNAL_FAILURE), (obs, oldVal, newVal) -> Platform.runLater(() -> {
+            updateIndicator(Color.RED, signalFailureStatus, newVal);
+    //        logger.info("Signal failure status updated to {}", newVal);
+        }));
+        appendListener(currentSubject.getBooleanProperty(BRAKE_FAILURE), (obs, oldVal, newVal) -> Platform.runLater(() -> {
+            updateIndicator(Color.RED, brakeFailureStatus, newVal);
+    //        logger.info("Brake failure status updated to {}", newVal);
+        }));
+        appendListener(currentSubject.getBooleanProperty(POWER_FAILURE), (obs, oldVal, newVal) -> Platform.runLater(() -> {
+            updateIndicator(Color.RED, powerFailureStatus, newVal);
+    //        logger.info("Power failure status updated to {}", newVal);
+        }));
+        appendListener(currentSubject.getBooleanProperty(IN_TUNNEL), (obs, oldVal, newVal) -> Platform.runLater(() -> {
+            updateIndicator(Color.YELLOW, inTunnelStatus, newVal);
+            inTunnelUpdates();
+   //         logger.info("In tunnel status updated to {}", newVal);
+        }));
+        appendListener(currentSubject.getBooleanProperty(LEFT_PLATFORM), (obs, oldVal, newVal) -> Platform.runLater(() -> {
+            updateIndicator(Color.LIGHTGREEN, stationSideLeftStatus, newVal);
+   //         logger.info("Left platform status updated to {}", newVal);
+        }));
+        appendListener(currentSubject.getBooleanProperty(RIGHT_PLATFORM), (obs, oldVal, newVal) -> Platform.runLater(() -> {
+            updateIndicator(Color.LIGHTGREEN, stationSideRightStatus, newVal);
+  //          logger.info("Right platform status updated to {}", newVal);
+        }));
+        bindStringText(nextStationText);
+
     }
 
-    private void bindStringText(Text text, String propertyName){
-        appendListener(currentSubject.getProperty(propertyName),(obs,oldVal,newVal) -> {
-            Platform.runLater(()-> text.setText((String)newVal));
-        });
+    private void bindStringText(Text text){
+        appendListener(currentSubject.getProperty(NEXT_STATION),(obs, oldVal, newVal) -> Platform.runLater(()-> text.setText((String)newVal)));
+        appendListener(currentSubject.getProperty(ARRIVAL_STATION),(obs, oldVal, newVal) -> Platform.runLater(()-> {
+            if(newVal != null){
+                sendAlert("Arriving at " + newVal);
+            }
+        }));
     }
 
     private void updateIndicator(Color color, Circle indicator, boolean isActive) {
@@ -162,7 +285,7 @@ public class TrainControllerManager {
 
     private void bindControls() {
         bindSliderAndTextField(setSpeedSlider, setSpeedTextField, newValue -> {
-            currentSubject.setProperty(OVERRIDE_SPEED.getPropertyName(), newValue);
+            currentSubject.setProperty(OVERRIDE_SPEED, newValue);
         });
         bindCheckBox(intLightCheckBox, INT_LIGHTS);
         bindCheckBox(extLightCheckBox, EXT_LIGHTS);
@@ -180,18 +303,18 @@ public class TrainControllerManager {
         });
     }
 
-    private void bindCheckBox(CheckBox checkBox, Controller_Property propertyName) {
+    private void bindCheckBox(CheckBox checkBox, ControllerProperty property) {
         appendListener(checkBox.selectedProperty(),(obs, oldVal, newVal) -> {
-                currentSubject.setProperty(propertyName.getPropertyName(), newVal);
-                setNotification(propertyName,String.valueOf(checkBox.isSelected()));
+                currentSubject.setProperty(property, newVal);
+                queueNotification(property,String.valueOf(checkBox.isSelected()));
         });
     }
 
-    private void bindDoubleTextField(TextField textField, Controller_Property property) {
+    private void bindDoubleTextField(TextField textField, ControllerProperty property) {
         Runnable textFieldUpdate = () -> {
             try {
-                currentSubject.setProperty(property.getPropertyName(), Double.parseDouble(textField.getText()));
-                setNotification(property, textField.getText());
+                currentSubject.setProperty(property, Double.parseDouble(textField.getText()));
+                queueNotification(property, textField.getText());
             } catch (NumberFormatException e) {
                 showErrorDialog("Invalid input", "Please enter a valid number.");
                 textField.setText("");
@@ -211,21 +334,35 @@ public class TrainControllerManager {
         emergencyBrakeButton.setOnAction(event -> {
             BooleanProperty eBrakeProp = currentSubject.getBooleanProperty(EMERGENCY_BRAKE);
             currentSubject.setProperty(EMERGENCY_BRAKE, !eBrakeProp.get());
-            setNotification(EMERGENCY_BRAKE,String.valueOf(eBrakeProp.get()));
+            queueNotification(EMERGENCY_BRAKE, String.valueOf(eBrakeProp.get()));
+            logger.info("Emergency button toggled to {}", !eBrakeProp.get());
         });
         makeAnnouncementsButton.setOnAction(event -> {
             BooleanProperty announceProp = currentSubject.getBooleanProperty(ANNOUNCEMENTS);
-            currentSubject.setProperty(ANNOUNCEMENTS.getPropertyName(), !announceProp.get());
+            currentSubject.setProperty(ANNOUNCEMENTS, !announceProp.get());
 
-            setNotification(ANNOUNCEMENTS,"");
             if (!nextStationText.getText().contains("yard") && !nextStationText.getText().contains("Yard")) {
-                Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                alert.setTitle("Arrival");
-                alert.setHeaderText(null);
-                alert.setContentText("Arriving at " + nextStationText.getText());
-                alert.showAndWait();
+                sendAlert("Arriving at " + nextStationText.getText());
             }
         });
+
+        killTrain.setOnAction(event -> {
+            if(TrainControllerFactory.getTrainLock()){
+                logger.warn("Train Controller is locked, unable to kill train");
+                return;
+            }
+            logger.warn("Killing Train Controller for train ID: {}", currentSubject.getController().getID());
+            currentSubject.getController().delete();
+        });
+    }
+
+    private void sendAlert(String alertMessage){
+        queueNotification(ANNOUNCEMENTS,alertMessage);
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Arrival");
+        alert.setHeaderText(null);
+        alert.setContentText(alertMessage);
+        alert.showAndWait();
     }
 
 
@@ -235,19 +372,20 @@ public class TrainControllerManager {
             if(Math.abs(oldVal.doubleValue() - newVal.doubleValue()) < 0.1) {return;}
             consumer.accept(newVal.doubleValue());
             textField.setText(String.format("%.1f", newVal.doubleValue()));
-            setNotification(OVERRIDE_SPEED,String.format("%.1f",newVal.doubleValue()));
+            sendNotification(OVERRIDE_SPEED,String.format("%.1f",newVal.doubleValue()));
         });
         Runnable textFieldUpdate = () -> {
             try {
                 double newValue = Double.parseDouble(textField.getText());
+                newValue = (double) Math.round(newValue * 20) / 20.0;
                 if (newValue < slider.getMin() || newValue > slider.getMax()) {
                     throw new NumberFormatException();
                 }
                 slider.setValue(newValue);
-                setNotification(OVERRIDE_SPEED,String.format("%.1f",newValue));
+                queueNotification(OVERRIDE_SPEED,String.format("%.1f",newValue));
             } catch (NumberFormatException e) {
                 textField.setText(String.format("%.1f", slider.getValue()));
-                setNotification(OVERRIDE_SPEED,String.format("%.1f",slider.getValue()));
+                queueNotification(OVERRIDE_SPEED,String.format("%.1f",slider.getValue()));
             }
         };
 
@@ -261,18 +399,7 @@ public class TrainControllerManager {
     }
 
 
-    private void changeTrainView(Integer trainID) {
-        if(currentSubject != null) {
-            statusLog.clear();
-            statusLog.setText("\n Train is running");
-            unbindControls();
-            updateAll();
-            currentSubject = subjectMap.getSubject(trainID);
-            bindControls();
-            bindGauges();
-            bindIndicators();
-        }
-    }
+
 
     private void unbindControls() {
         listenerReferences.forEach(ListenerReference::detach);
@@ -297,17 +424,57 @@ public class TrainControllerManager {
         setTemperatureTextField.textProperty().unbind();
         setKiTextField.textProperty().unbind();
         setKpTextField.textProperty().unbind();
+
+        logger.info("Controls unbound from train ID: {}", currentSubject.getController().getID());
     }
 
-    //Called when controller is switched, updates state of all UI elements
-    private void updateAll() {
-        if (currentSubject == null) {
-            System.out.println("No subject to update");
-            return;
-        }
+    private void updateUIForNullSubject() {
+        // Example of resetting UI components
+        statusLog.setText("N/A");
+        // Disable UI elements or set to default values
+        intLightCheckBox.setSelected(false);
+        extLightCheckBox.setSelected(false);
+        openDoorLeftCheckBox.setSelected(false);
+        openDoorRightCheckBox.setSelected(false);
+        toggleServiceBrakeCheckBox.setSelected(false);
+        autoModeCheckBox.setSelected(false);
+        setTemperatureTextField.setText("0.0");
+        setKiTextField.setText("0.0");
+        setKpTextField.setText("0.0");
+        setSpeedTextField.setText("0.0");
+        nextStationText.setText("No Station");
+        setSpeedSlider.setValue(0.0);
+        currentSpeedGauge.setValue(0.0);
+        commandedSpeedGauge.setValue(0.0);
+        speedLimitGauge.setValue(0.0);
+        authorityGauge.setValue(0.0);
+        powerOutputGauge.setValue(0.0);
+        currentTemperatureGauge.setValue(0.0);
+        updateIndicator(Color.GRAY, eBrakeStatus, false);
+        updateIndicator(Color.GRAY, signalFailureStatus, false);
+        updateIndicator(Color.GRAY, brakeFailureStatus, false);
+        updateIndicator(Color.GRAY, powerFailureStatus, false);
+        updateIndicator(Color.GRAY, inTunnelStatus, false);
+        updateIndicator(Color.GRAY, stationSideLeftStatus, false);
+        updateIndicator(Color.GRAY, stationSideRightStatus, false);
+        logger.info("UI reset for null subject");
+    }
 
-        //Batch update all properties
-            try{
+    private void setHWMode(boolean isHW){
+        HWTrainCheckBox.setSelected(isHW);
+        controllerStatusPane.disableProperty().setValue(isHW);
+        stationStatusPane.disableProperty().setValue(isHW);
+        cabinSettingsPane.disableProperty().setValue(isHW);
+        speedControllerPane.disableProperty().setValue(isHW);
+        brakePane.disableProperty().setValue(isHW);
+    }
+
+
+    //Called when controller is switched, updates state of all UI elements
+    private void updateView() {
+    setHWMode(currentSubject.getController().isHW());
+
+        // Update gauges
             currentSpeedGauge.setValue(currentSubject.getDoubleProperty(CURRENT_SPEED).get());
             commandedSpeedGauge.setValue(currentSubject.getDoubleProperty(COMMAND_SPEED).get());
             speedLimitGauge.setValue(currentSubject.getDoubleProperty(SPEED_LIMIT).get());
@@ -340,10 +507,10 @@ public class TrainControllerManager {
 
             // Update slider (Assuming it should match the overrideSpeed)
             setSpeedSlider.setValue(currentSubject.getDoubleProperty(OVERRIDE_SPEED).get());
-            }catch (Exception e){
-                System.out.println("Error updating UI elements");
-            }
 
+            logger.debug("UI elements updated for train ID: {}", currentSubject.getProperty(TRAIN_ID));
+
+            bindAll();
     }
 
     // Calls when the inTunnelStatus is updated, it checks off the intLights and extLights
@@ -364,27 +531,28 @@ public class TrainControllerManager {
     }
 
     // Set the current action
-    private void setNotification(Controller_Property propertyName, String value) {
+    private void setNotification(ControllerProperty propertyName, String value) {
         String statusNotification = switch (propertyName) {
             case OVERRIDE_SPEED -> "\nSet Speed to \n" + value + " MPH";
             case SERVICE_BRAKE, LEFT_DOORS, RIGHT_DOORS, INT_LIGHTS,
                     EXT_LIGHTS, AUTOMATIC_MODE ->
                     "\n" + getPropertyLabel(propertyName) + "\n" + (Boolean.parseBoolean(value) ? getOnLabel(propertyName) : getOffLabel(propertyName));
-            case EMERGENCY_BRAKE -> "\nEmergency Brake \n" + value;
+            case EMERGENCY_BRAKE -> "\nEmergency Brake \n" + (Boolean.parseBoolean(value) ? getOffLabel(propertyName):getOnLabel(propertyName)); // For some reason emergency brake boolean values are flipped
             case SET_TEMPERATURE -> "\nTemperature set to \n" + value + " \u00B0F";
             case KI -> "\nKi set to \n" + value;
             case KP -> "\nKp set to \n" + value;
-            case ANNOUNCEMENTS -> "\nAnnouncements Created\n";
+            case ANNOUNCEMENTS -> "\nAnnouncement: " + value +"\n";
             default -> "\nTrain is running";
         };
 
         Platform.runLater(() -> {
             statusLog.setText(statusNotification);
             statusLog.setWrapText(true);
+   //         logger.info("Status notification set for {}: {}", propertyName, statusNotification.trim());
         });
     }
 
-    private String getPropertyLabel(Controller_Property propertyName) {
+    private String getPropertyLabel(ControllerProperty propertyName) {
         return switch (propertyName) {
             case SERVICE_BRAKE -> "Service Brake";
             case LEFT_DOORS -> "Left Doors";
@@ -392,25 +560,101 @@ public class TrainControllerManager {
             case INT_LIGHTS -> "Interior Lights";
             case EXT_LIGHTS -> "Exterior Lights";
             case AUTOMATIC_MODE -> "Automatic Mode";
+            case EMERGENCY_BRAKE -> "Emergency Brake";
             default -> "";
         };
     }
 
-    private String getOnLabel(Controller_Property propertyName) {
+    private String getOnLabel(ControllerProperty propertyName) {
         return switch (propertyName) {
             case SERVICE_BRAKE -> "Engaged";
             case LEFT_DOORS, RIGHT_DOORS -> "Opened";
-            case INT_LIGHTS, EXT_LIGHTS, AUTOMATIC_MODE -> "On";
+            case INT_LIGHTS, EXT_LIGHTS, AUTOMATIC_MODE,EMERGENCY_BRAKE -> "On";
             default -> "";
         };
     }
 
-    private String getOffLabel(Controller_Property propertyName) {
+    private String getOffLabel(ControllerProperty propertyName) {
         return switch (propertyName) {
             case SERVICE_BRAKE -> "Disengaged";
             case LEFT_DOORS, RIGHT_DOORS -> "Closed";
-            case INT_LIGHTS, EXT_LIGHTS, AUTOMATIC_MODE -> "Off";
+            case INT_LIGHTS, EXT_LIGHTS, AUTOMATIC_MODE,EMERGENCY_BRAKE -> "Off";
             default -> "";
         };
     }
+
+    ///TODO
+    // Goal: Reflect all changes to the train (aka, listening to all the properties)
+    // Goal: Change to an alert
+    //      - Entering a new block
+    //      - When we get new authority from track
+    //      - New Command Speed Updates
+    //      - Passenger E-Brake
+    // When a new action occurs, store inside queue thats in single-executed thread
+    //
+    private final Object lock = new Object();
+    private Future<?> scheduledFuture = null;
+    private Future<?> debounceFuture = null;
+
+    private final long debounceDelay = 100; // Debounce delay in milliseconds for sendNotification
+
+    private final LinkedBlockingDeque<TextUpdateTask> textUpdateQueue = new LinkedBlockingDeque<>();
+
+    private void runQueue() {
+        synchronized (lock) {
+            if (scheduledFuture == null || scheduledFuture.isDone()) {
+                if (!textUpdateQueue.isEmpty()) {
+                    TextUpdateTask task = textUpdateQueue.poll();
+                    scheduledFuture = textUpdateExecutor.schedule(task::run, task.delay, TimeUnit.MILLISECONDS);
+                }
+            }
+        }
+    }
+
+    private void sendNotification(ControllerProperty propertyName, String value) {
+        synchronized (lock) {
+            textUpdateQueue.clear();
+            TextUpdateTask task = new TextUpdateTask(propertyName, value, 0);
+
+            if (debounceFuture != null && !debounceFuture.isDone()) {
+                debounceFuture.cancel(false);
+            }
+
+            debounceFuture = textUpdateExecutor.schedule(() -> {
+                synchronized (lock) {
+                    textUpdateQueue.offer(task);
+                    runQueue();
+                }
+            }, debounceDelay, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    private void queueNotification(ControllerProperty propertyName, String value) {
+        synchronized (lock) {
+            boolean wasEmpty = textUpdateQueue.isEmpty();
+            textUpdateQueue.offer(new TextUpdateTask(propertyName, value, wasEmpty ? 50 : 1000));
+            if (wasEmpty) {
+                runQueue();
+            }
+        }
+    }
+
+    private class TextUpdateTask implements Runnable {
+        private final ControllerProperty propertyName;
+        private final String text;
+        private final long delay;
+
+        public TextUpdateTask(ControllerProperty propertyName, String value, long delay) {
+            this.propertyName = propertyName;
+            this.text = value;
+            this.delay = delay;
+        }
+
+        @Override
+        public void run() {
+            setNotification(propertyName, text);
+        }
+    }
+
+
 }

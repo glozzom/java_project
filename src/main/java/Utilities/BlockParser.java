@@ -13,6 +13,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
+import static Utilities.Enums.BlockType.YARD;
 import static Utilities.Enums.Direction.*;
 import static Utilities.Records.BasicBlock.Connection;
 import static Utilities.Records.BasicBlock.NextBlock;
@@ -57,7 +58,7 @@ class BlockParser {
     }
 
     public static ConcurrentHashMap<Lines, ConcurrentSkipListMap<Integer, BasicBlock>> parseCSV(){
-        return parseCSV("src/main/resources/Framework/working_track_layout.csv");
+        return parseCSV("src/main/resources/Framework/red_yard_experiment.csv");
     }
 
     public static BasicBlock fromCsv(String[] values, String[] headers) {
@@ -86,6 +87,11 @@ class BlockParser {
 
         Lines line = Lines.valueOf(trackLineString.toUpperCase());
 
+        if(blockType == YARD){
+            stationName = "YARD";
+            blockLength = Constants.TRAIN_LENGTH * 4;
+        }
+
         return new BasicBlock(line, section, blockNumber, blockLength, blockGrade, speedLimit,
                 elevation, cumulativeElevation, isUnderground, isSwitch, isLight, blockType, Optional.ofNullable(stationName),
                 doorDirection, nextBlock);
@@ -110,7 +116,7 @@ class BlockParser {
         } else if (infrastructure.contains("CROSSING")) {
             return BlockType.CROSSING;
         } else if (infrastructure.contains("YARD")) {
-            return BlockType.YARD;
+            return YARD;
         } else {
             return BlockType.REGULAR;
         }

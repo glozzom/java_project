@@ -1,12 +1,13 @@
 package Common;
 
 
-import Framework.Support.GUIModifiable;
+import Framework.Support.GUIModifiableEnum;
 import Utilities.Records.Beacon;
-import Utilities.Records.UpdatedTrainValues;
+import trainController.ControllerProperty;
 import trainController.TrainControllerSubject;
+import trainModel.Records.UpdatedTrainValues;
 
-public interface TrainController extends GUIModifiable {
+public interface TrainController extends GUIModifiableEnum<ControllerProperty> {
 
     //To clear the situation, all setters and getters are called from logic, not from the GUI
     //GUI sets values through the setVaalue function
@@ -19,10 +20,11 @@ public interface TrainController extends GUIModifiable {
     //Called by the train based on information from the track model
     void setCommandSpeed(double speed);
     void setCurrentTemperature(double temp);
+    void updateBeacon(Beacon beacon);
 
     //-----Functions called by the controller function or the train controller UI
     void setEmergencyBrake(boolean brake);
-
+    void setPassengerEBrake();
     TrainControllerSubject getSubject();
 
     //The train cannot store its own ID, so the train controller must store it
@@ -61,10 +63,20 @@ public interface TrainController extends GUIModifiable {
 
     void delete();
 
+    boolean isHW();
+
     double calculatePower(double currentVelocity);
 
     double getGrade();
-    void updateBeacon(Beacon beacon);
+
     UpdatedTrainValues sendUpdatedTrainValues();
     TrainModel getTrain();
+
+    void checkFailures(double power);
+
+    double getSpeed();
+
+    Beacon getBeacon();
+
+    void onBlock();
 }

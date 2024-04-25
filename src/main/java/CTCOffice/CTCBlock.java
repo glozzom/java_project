@@ -1,12 +1,16 @@
 package CTCOffice;
 
+import Framework.Simulation.WaysideSystem;
+import Framework.Support.BlockIDs;
 import Framework.Support.Notifier;
-import Utilities.Enums.Lines;
 import Utilities.Records.BasicBlock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static CTCOffice.Properties.BlockProperties.SWITCH_STATE_STRING_PROPERTY;
-import static Utilities.Enums.BlockType.*;
+import static Utilities.Enums.BlockType.CROSSING;
 import static Utilities.Enums.Direction.NORTH;
+
 
 /**
  * This class represents a block of the track in the Centralized Traffic Control (CTC) system.
@@ -14,29 +18,28 @@ import static Utilities.Enums.Direction.NORTH;
  * their states, speed limit, block length, IDs of converging and diverging blocks, and the state of the switch.
  */
 class CTCBlock implements Notifier {
-    private final int blockID;
-    private final Lines line;
+
+    private static final Logger logger = LoggerFactory.getLogger(CTCBlock.class.getName());
+
+    private final BlockIDs blockID;
     private final boolean hasLight, hasCrossing;
     private boolean isSwitchCon, isSwitchDiv;
     private boolean occupied, underMaintenance, direction, directionAssigned;
 
-    private int convergingBlockID, divergingBlockOneID, divergingBlockTwoID;
+    private BlockIDs convergingBlockID, divergingBlockOneID, divergingBlockTwoID;
     private boolean lightState, switchState, crossingState;
     private final double speedLimit, blockLength;
 
-    CTCBlockSubjectMapGreen mapGreen = CTCBlockSubjectMapGreen.getInstance();
-    CTCBlockSubjectMapRed mapRed = CTCBlockSubjectMapRed.getInstance();
+    CTCBlockSubjectMap subMap = CTCBlockSubjectMap.getInstance();
 
     /**
      * Constructor for the CTCBlockInfo class.
      * Initializes the block properties and registers the block with the CTCBlockSubjectFactory.
      */
     CTCBlock(BasicBlock block) {
-
-        this.blockID = block.blockNumber();
-        this.line = block.trackLine();
+        this.blockID = new BlockIDs(block.blockNumber(), block.trackLine());
         this.occupied = false;
-        this.hasLight = block.blockType() == STATION;
+        this.hasLight = block.isLight();
         this.isSwitchCon = block.isSwitch();
 
         this.hasCrossing = (block.blockType() == CROSSING);
@@ -50,73 +53,59 @@ class CTCBlock implements Notifier {
         this.underMaintenance = false;
 
         if(this.isSwitchCon) {
-            this.convergingBlockID = block.blockNumber();
-            this.divergingBlockOneID = (block.nextBlock().primarySwitchDirection() == NORTH) ?
-                    block.nextBlock().northDefault().blockNumber() : block.nextBlock().southDefault().blockNumber();
-            this.divergingBlockTwoID = (block.nextBlock().primarySwitchDirection() == NORTH) ?
-                    block.nextBlock().northAlternate().blockNumber() : block.nextBlock().southAlternate().blockNumber();
+            this.convergingBlockID = blockID;
+            this.divergingBlockOneID = BlockIDs.of(((block.nextBlock().primarySwitchDirection() == NORTH) ?
+                    block.nextBlock().northDefault().blockNumber() : block.nextBlock().southDefault().blockNumber()), blockID.line());
+            this.divergingBlockTwoID = BlockIDs.of(((block.nextBlock().primarySwitchDirection() == NORTH) ?
+                    block.nextBlock().northAlternate().blockNumber() : block.nextBlock().southAlternate().blockNumber()), blockID.line());
         }
-        if(line.equals(Lines.GREEN)) {
-            mapGreen.registerSubject(blockID, new CTCBlockSubject(this));
-        } else {
-            mapRed.registerSubject(blockID, new CTCBlockSubject(this));
-        }
+            subMap.registerSubject(blockID, new CTCBlockSubject(this));
     }
 
-    void setSwitchDivInformation(int convergingBlockID, int divergingBlockOneID, int divergingBlockTwoID) {
+    void setSwitchDivInformation(BlockIDs convergingBlockID, BlockIDs divergingBlockOneID, BlockIDs divergingBlockTwoID) {
         this.isSwitchDiv = true;
         this.convergingBlockID = convergingBlockID;
         this.divergingBlockOneID = divergingBlockOneID;
         this.divergingBlockTwoID = divergingBlockTwoID;
-        if(this.line.equals(Lines.GREEN)) {
-            CTCBlockSubjectMapGreen.getInstance().getSubject(this.blockID).updateStringProperty(SWITCH_STATE_STRING_PROPERTY);
-        } else {
-            CTCBlockSubjectMapRed.getInstance().getSubject(this.blockID).updateStringProperty(SWITCH_STATE_STRING_PROPERTY);
-        }
+        CTCBlockSubjectMap.getInstance().getSubject(this.blockID).updateStringProperty(SWITCH_STATE_STRING_PROPERTY);
     }
-    int getDivergingBlockOneID() {
+    BlockIDs getDivergingBlockOneID() {
         return divergingBlockOneID;
     }
-    int getDivergingBlockTwoID() {
+    BlockIDs getDivergingBlockTwoID() {
         return divergingBlockTwoID;
     }
-    int getConvergingBlockID() {
+    BlockIDs getConvergingBlockID() {
         return convergingBlockID;
     }
 
     /**
      * Sets the state of the switch and updates the switch state of the converging and diverging blocks.
      */
-    void setSwitchState(boolean state) {
-        this.switchState = state;
-        if(convergingBlockID == 0 || divergingBlockOneID == 0 || divergingBlockTwoID == 0){
-            return;
+    void setSwitchState(boolean GUI, boolean state) {
+        if(!underMaintenance && GUI){
+            setUnderMaintenance(true, true);
         }
-
-        if(convergingBlockID == blockID) {
-            if(line.equals(Lines.RED)) {
-                mapRed.getSubject(divergingBlockOneID).setProperty("switchState", state);
-                mapRed.getSubject(divergingBlockTwoID).setProperty("switchState", state);
-            } else {
-                mapGreen.getSubject(divergingBlockOneID).setProperty("switchState", state);
-                mapGreen.getSubject(divergingBlockTwoID).setProperty("switchState", state);
+        if(!GUI){
+            this.switchState = state;
+            notifyChange("switchState", state);if (!(isSwitchCon || isSwitchDiv)) {
+                return;
+            }
+            if ((convergingBlockID == blockID) && ((state != subMap.getSubject(BlockIDs.of(divergingBlockOneID.blockIdNum(), blockID.line())).getBlockInfo().getSwitchState())
+                    ||  (state != subMap.getSubject(BlockIDs.of(divergingBlockTwoID.blockIdNum(), blockID.line())).getBlockInfo().getSwitchState()))){
+                subMap.getSubject(BlockIDs.of(divergingBlockOneID.blockIdNum(), blockID.line())).getBlockInfo().setSwitchState(false, state);
+                subMap.getSubject(BlockIDs.of(divergingBlockTwoID.blockIdNum(), blockID.line())).getBlockInfo().setSwitchState(false, state);
+            }
+            subMap.getSubject(convergingBlockID).updateStringProperty("switchStateString");
+            subMap.getSubject(divergingBlockOneID).updateStringProperty("switchStateString");
+            subMap.getSubject(divergingBlockTwoID).updateStringProperty("switchStateString");
+            if ((divergingBlockOneID.blockIdNum() == blockID.blockIdNum() || divergingBlockTwoID.blockIdNum() == blockID.blockIdNum()) &&
+                    (subMap.getSubject(BlockIDs.of(convergingBlockID.blockIdNum(), blockID.line())).getBlockInfo().getSwitchState() != state)) {
+                subMap.getSubject(convergingBlockID).getBlockInfo().setSwitchState(false, state);
             }
         }
-        System.out.println("Switch State: " + switchState + " \n");
-        if(line.equals(Lines.RED)) {
-            mapRed.getSubject(convergingBlockID).updateStringProperty("switchStateString");
-            mapRed.getSubject(divergingBlockOneID).updateStringProperty("switchStateString");
-            mapRed.getSubject(divergingBlockTwoID).updateStringProperty("switchStateString");
-            if(divergingBlockOneID == blockID || divergingBlockTwoID == blockID) {
-                mapRed.getSubject(convergingBlockID).setProperty("switchState", state);
-            }
-        } else {
-            mapGreen.getSubject(convergingBlockID).updateStringProperty("switchStateString");
-            mapGreen.getSubject(divergingBlockOneID).updateStringProperty("switchStateString");
-            mapGreen.getSubject(divergingBlockTwoID).updateStringProperty("switchStateString");
-            if(divergingBlockOneID == blockID || divergingBlockTwoID == blockID) {
-                mapGreen.getSubject(convergingBlockID).setProperty("switchState", state);
-            }
+        else{WaysideSystem.getController(blockID.line(), blockID.blockIdNum()).maintenanceSetSwitch(convergingBlockID.blockIdNum(), state);
+            logger.info("Wayside called to set switch state to " + state + " for block " + convergingBlockID.blockIdNum() + " on line " + blockID.line());
         }
     }
 
@@ -124,29 +113,32 @@ class CTCBlock implements Notifier {
      * Returns a string representation of the switch state.
      */
     String getSwitchStateString() {
-        if(mapGreen.getSubject(getBlockID()) != null) {
-            if (convergingBlockID == 0 || divergingBlockOneID == 0 || divergingBlockTwoID == 0) {
+        if(subMap.getSubject(blockID) != null) {
+            if (!(isSwitchCon || isSwitchDiv)) {
                 return "";
             }
         }
         else{return null;}
-        if(isSwitchCon && !switchState) {
-            return ( "( " + divergingBlockOneID + " == "  + convergingBlockID + " )  " + divergingBlockTwoID);
-        }
-        else if(isSwitchCon) {
-            return ( divergingBlockOneID +"  ( "   + convergingBlockID + " == " + divergingBlockTwoID + " )");
-        }
-        else if(isSwitchDiv && !switchState) {
-            if(divergingBlockOneID == blockID) {
-                return ( divergingBlockOneID + " ==== " + convergingBlockID);
-            }else {
-                return ( divergingBlockTwoID + "\t\t" + convergingBlockID);
+
+        if(isSwitchCon){
+            if(switchState) {
+                return ( divergingBlockOneID.blockIdNum() +"  ( "   + convergingBlockID.blockIdNum() + " == " + divergingBlockTwoID.blockIdNum() + " )");
+            }else{
+                return ( "( " + divergingBlockOneID.blockIdNum() + " == "  + convergingBlockID.blockIdNum() + " )  " + divergingBlockTwoID.blockIdNum());
             }
         }else if(isSwitchDiv) {
-            if(divergingBlockTwoID == blockID) {
-                return ( divergingBlockTwoID + " ==== " + convergingBlockID);
+            if(switchState) {
+                if(divergingBlockTwoID.blockIdNum() == blockID.blockIdNum()) {
+                    return ( divergingBlockTwoID.blockIdNum() + " ==== " + convergingBlockID.blockIdNum());
+                }else {
+                    return ( divergingBlockOneID.blockIdNum() + "\t\t" + convergingBlockID.blockIdNum());
+                }
             }else {
-                return ( divergingBlockOneID + "\t\t" + convergingBlockID);
+                if(divergingBlockOneID.blockIdNum() == blockID.blockIdNum()) {
+                    return ( divergingBlockOneID.blockIdNum() + " ==== " + convergingBlockID.blockIdNum());
+                }else {
+                    return ( divergingBlockTwoID.blockIdNum() + "\t\t" + convergingBlockID.blockIdNum());
+                }
             }
         }else {
             return "";
@@ -156,20 +148,21 @@ class CTCBlock implements Notifier {
 
     // Simple setters and getters
     int     getBlockID      () {
-        return blockID;
+        return blockID.blockIdNum();
     }
     String getLine() {
-        return line.toString();
+        return blockID.line().toString();
     }
     double     getSpeedLimit   () {
         return speedLimit;
     }
-    double     getBlockLength  () {
+    double     getLength  () {
         return blockLength;
     }
 
-    void    setOccupied     (boolean occupied) {
+    void    setOccupied     (boolean GUI, boolean occupied) {
         this.occupied = occupied;
+        if(!GUI){notifyChange("occupied", occupied);}
     }
     boolean getOccupied     () {
         return occupied;
@@ -177,12 +170,30 @@ class CTCBlock implements Notifier {
     boolean getUnderMaintenance () {
         return underMaintenance;
     }
-    void    setUnderMaintenance (boolean underMaintenance) {
-        this.underMaintenance = underMaintenance;
+    void    setUnderMaintenance (boolean GUI, boolean underMaintenance) {
+        if(!GUI){this.underMaintenance = underMaintenance; notifyChange("underMaintenance", underMaintenance);}
+        else{
+            if(isSwitchCon || isSwitchDiv){
+                logger.info("Wayside called to set maintenance state to " + underMaintenance + " for switch from block " + convergingBlockID.blockIdNum() + " on line " + blockID.line());
+                WaysideSystem.getController(convergingBlockID.line(), convergingBlockID.blockIdNum()).CTCChangeBlockMaintenanceState(convergingBlockID.blockIdNum(), underMaintenance);
+                WaysideSystem.getController(divergingBlockOneID.line(), divergingBlockOneID.blockIdNum()).CTCChangeBlockMaintenanceState(divergingBlockOneID.blockIdNum(), underMaintenance);
+                WaysideSystem.getController(divergingBlockTwoID.line(), divergingBlockTwoID.blockIdNum()).CTCChangeBlockMaintenanceState(divergingBlockTwoID.blockIdNum(), underMaintenance);
+            } else {
+                logger.info("Wayside called to set maintenance state to " + underMaintenance + " for block " + blockID.blockIdNum() + " on line " + blockID.line());
+                WaysideSystem.getController(blockID.line(), blockID.blockIdNum()).CTCChangeBlockMaintenanceState(blockID.blockIdNum(), underMaintenance);
+            }
+        }
     }
 
-    void setSwitchLightState(boolean switchLightState) {
-        this.lightState = switchLightState;
+    void setSwitchLightState(boolean GUI, boolean switchLightState) {
+        if(!underMaintenance && GUI){
+            setUnderMaintenance(true, true);
+        }
+        if(!GUI){this.lightState = switchLightState; notifyChange("switchLightState", switchLightState);}
+        else{
+            logger.info("Wayside called to set light state to " + switchLightState + " for block " + blockID.blockIdNum() + " on line " + blockID.line());
+            WaysideSystem.getController(blockID.line(), blockID.blockIdNum()).maintenanceSetTrafficLight(blockID.blockIdNum(), switchLightState);
+        }
     }
     boolean getHasLight     () {
         return hasLight;
@@ -191,8 +202,15 @@ class CTCBlock implements Notifier {
         return lightState;
     }
 
-    void    setCrossingState(boolean crossingState) {
+    void    setCrossingState(boolean GUI, boolean crossingState) {
+        if(!underMaintenance && GUI){
+            setUnderMaintenance(true, true);
+        }
         this.crossingState = crossingState;
+        if(!GUI){notifyChange("crossingState", crossingState);}
+        else{ WaysideSystem.getController(blockID.line(), blockID.blockIdNum()).maintenanceSetCrossing(blockID.blockIdNum(), crossingState);
+        logger.info("Wayside called to set crossing state to " + crossingState + " for block " + blockID.blockIdNum() + " on line " + blockID.line());
+        }
     }
     boolean getHasCrossing  () {
         return hasCrossing;
@@ -204,15 +222,9 @@ class CTCBlock implements Notifier {
     public boolean getSwitchState           () {
         return switchState;
     }
-    boolean getSwitchCon() {
-        return isSwitchCon;
-    }
-    boolean getSwitchDiv() {
-        return isSwitchDiv;
-    }
 
     public void notifyChange(String property, Object newValue) {
-
+        subMap.getSubject(blockID).setProperty(property, newValue);
     }
 }
 

@@ -1,11 +1,9 @@
 package trackModel;
 
-import Utilities.BasicBlockLine;
+import Utilities.HelperObjects.TrackBlockLine;
 import javafx.beans.property.*;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-
-import java.util.ArrayList;
 
 public class TrackLineSubject {
     private StringProperty blockNumber;
@@ -29,7 +27,7 @@ public class TrackLineSubject {
     private BooleanProperty isOccupied;
 
     //labels
-    private StringProperty direction;
+    private BooleanProperty direction;
     private StringProperty passEmbarked;
     private StringProperty passDisembarked;
     private StringProperty ticketSales;
@@ -43,7 +41,7 @@ public class TrackLineSubject {
     private StringProperty setBeacon;
     private StringProperty nameOfStation;
     private StringProperty trackHeater;
-    private StringProperty outsideTemp;
+    private IntegerProperty outsideTemp;
 
     private ObservableList<TrackBlockSubject> blockList;
 
@@ -73,13 +71,13 @@ public class TrackLineSubject {
         tempDisplay = new SimpleStringProperty();
         setBeacon = new SimpleStringProperty();
         nameOfStation = new SimpleStringProperty();
-        trackHeater = new SimpleStringProperty("STATUS - OFF");
+        trackHeater = new SimpleStringProperty();
         trackCircuitFailure = new SimpleBooleanProperty();
         powerFailure = new SimpleBooleanProperty();
         brokenRail = new SimpleBooleanProperty();
         blockElevation = new SimpleDoubleProperty();
-        outsideTemp = new SimpleStringProperty();
-        direction = new SimpleStringProperty();
+        outsideTemp = new SimpleIntegerProperty();
+        direction = new SimpleBooleanProperty();
         blockList = FXCollections.observableArrayList();
     }
 
@@ -95,7 +93,7 @@ public class TrackLineSubject {
         initializeValues();
         initializeListeners();
         trackBlockLine.forEach((blockID, block) -> {
-            blockList.add(new TrackBlockSubject(block));
+//            blockList.add(new TrackBlockSubject(block));
         });
     }
 
@@ -477,27 +475,27 @@ public class TrackLineSubject {
     }
 
 
-    public String getOutsideTemp() {
+    public int getOutsideTemp() {
         return outsideTemp.get();
     }
 
-    public StringProperty outsideTempProperty() {
+    public IntegerProperty outsideTempProperty() {
         return outsideTemp;
     }
 
-    public void setOutsideTemp(String outsideTemp) {
+    public void setOutsideTemp(int outsideTemp) {
         this.outsideTemp.set(outsideTemp);
     }
 
-    public String getDirection() {
+    public boolean isDirection() {
         return direction.get();
     }
 
-    public StringProperty directionProperty() {
+    public BooleanProperty directionProperty() {
         return direction;
     }
 
-    public void setDirection(String direction) {
+    public void setDirection(boolean direction) {
         this.direction.set(direction);
     }
 }
