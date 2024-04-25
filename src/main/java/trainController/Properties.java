@@ -1,31 +1,36 @@
 package trainController;
 
+//TODO: Change this to an enum in the future
 public class Properties {
-    public static final String authority_p = "authority";
-    public static final String overrideSpeed_p = "overrideSpeed";
-    public static final String commandSpeed_p = "commandSpeed";
-    public static final String automaticMode_p = "automaticMode";
-    public static final String currentSpeed_p = "currentSpeed";
-    public static final String serviceBrake_p = "serviceBrake";
-    public static final String emergencyBrake_p = "emergencyBrake";
-    public static final String Ki_p = "Ki";
-    public static final String Kp_p = "Kp";
-    public static final String power_p = "power";
-    public static final String intLights_p = "intLights";
-    public static final String extLights_p = "extLights";
-    public static final String leftDoors_p = "leftDoors";
-    public static final String rightDoors_p = "rightDoors";
-    public static final String temperature_p = "temperature";
-    public static final String announcements_p = "announcements";
-    public static final String signalFailure_p = "signalFailure";
-    public static final String brakeFailure_p = "brakeFailure";
-    public static final String powerFailure_p = "powerFailure";
-    public static final String inTunnel_p = "inTunnel";
-    public static final String leftPlatform_p = "leftPlatform";
-    public static final String rightPlatform_p = "rightPlatform";
-    public static final String samplingPeriod_p = "samplingPeriod";
-    public static final String speedLimit_p = "speedLimit";
-    public static final String nextStationName_p = "nextStationName";
-    public static final String grade_p = "grade";
-    public static final String trainID_p = "trainID";
+     static final String AUTHORITY_PROPERTY = "authority";
+     static final String OVERRIDE_SPEED_PROPERTY = "override_Speed";
+     static final String COMMAND_SPEED_PROPERTY = "command_Speed";
+     static final String AUTOMATIC_MODE_PROPERTY = "automatic_Mode";
+     static final String CURRENT_SPEED_PROPERTY = "current_Speed";
+     static final String SERVICE_BRAKE_PROPERTY = "service_Brake";
+     static final String EMERGENCY_BRAKE_PROPERTY = "emergency_Brake";
+     static final String KI_PROPERTY = "Ki";
+     static final String KP_PROPERTY = "Kp";
+     static final String POWER_PROPERTY = "power";
+     static final String INT_LIGHTS_PROPERTY = "int_Lights";
+     static final String EXT_LIGHTS_PROPERTY = "ext_Lights";
+     static final String LEFT_DOORS_PROPERTY = "left_Doors";
+     static final String RIGHT_DOORS_PROPERTY = "right_Doors";
+     static final String SET_TEMPERATURE_PROPERTY = "set_Temperature";
+     static final String CURRENT_TEMPERATURE_PROPERTY ="current_Temperature";
+     static final String ANNOUNCEMENTS_PROPERTY = "announcements";
+     static final String SIGNAL_FAILURE_PROPERTY = "signal_Failure";
+     static final String BRAKE_FAILURE_PROPERTY = "brake_Failure";
+     static final String POWER_FAILURE_PROPERTY = "power_Failure";
+     static final String IN_TUNNEL_PROPERTY = "in_Tunnel";
+     static final String LEFT_PLATFORM_PROPERTY = "left_Platform";
+     static final String RIGHT_PLATFORM_PROPERTY = "right_Platform";
+     static final String SAMPLING_PERIOD_PROPERTY = "sampling_Period";
+     static final String SPEED_LIMIT_PROPERTY = "speed_Limit";
+     static final String NEXT_STATION_PROPERTY = "next_Station_Name";
+     static final String GRADE_PROPERTY = "grade";
+     static final String TRAIN_ID_PROPERTY = "train_ID";
+
+     static final String ERROR_PROPERTY = "error";
 }
+

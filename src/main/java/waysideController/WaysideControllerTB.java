@@ -1,12 +1,11 @@
 package waysideController;
 
-import Common.WaysideController;
+import com.fazecast.jSerialComm.SerialPort;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
-import javafx.scene.control.cell.CheckBoxTableCell;
-import javafx.scene.control.cell.TextFieldTableCell;
-import javafx.util.StringConverter;
+
+import static waysideController.Properties.*;
 
 public class WaysideControllerTB {
 
@@ -27,81 +26,97 @@ public class WaysideControllerTB {
     @FXML
     public TableColumn<WaysideBlockSubject, Boolean> tbSTEnable;
     @FXML
-    public TableView<TrainSpeedAuth> tbSpeedAuthTable;
-    @FXML
-    public TableColumn<TrainSpeedAuth, Integer> tbSATID;
-    @FXML
-    public TableColumn<TrainSpeedAuth, Double> tbSATSpeedIn;
-    @FXML
-    public TableColumn<TrainSpeedAuth, Integer> tbSATAuthIn;
-    @FXML
-    public TableColumn<TrainSpeedAuth, Double> tbSATSpeedOut;
-    @FXML
-    public TableColumn<TrainSpeedAuth, Integer> tbSATAuthOut;
-    @FXML
     public Button tbCreateNewControllerButton;
     @FXML
     public ComboBox<String> tbHWPortComboBox;
     @FXML
     public Label tbHWPortLabel;
+    @FXML
+    public Button runPLCButton;
 
-    WaysideController controller;
-
-
-    private StringConverter<Double> doubleConverter = new StringConverter<Double>() {
-        @Override
-        public String toString(Double d) {
-            return d.toString();
-        }
-
-        @Override
-        public Double fromString(String s) {
-            return Double.parseDouble(s);
-        }
-    };
-
-    private StringConverter<Integer> intConverter = new StringConverter<Integer>() {
-        @Override
-        public String toString(Integer integer) {
-            return integer.toString();
-        }
-
-        @Override
-        public Integer fromString(String s) {
-            return Integer.parseInt(s);
-        }
-    };
+    WaysideControllerSubject currentSubject;
 
 
     @FXML
     private void initialize() {
+        // Set up cell value factories for table views
+        tbBTID.setCellValueFactory(block -> block.getValue().getIntegerProperty(blockID_p).asObject());
+        tbBTOccupied.setCellValueFactory(block -> block.getValue().getBooleanProperty(occupied_p));
+
+        tbSTID.setCellValueFactory(block -> block.getValue().getIntegerProperty(blockID_p).asObject());
+        tbSTSwitchTo.setCellValueFactory(block -> block.getValue().getIntegerProperty(switchedBlockID_p).asObject());
+
+        runPLCButton.setOnAction(event -> currentSubject.getController().runPLC());
+
+        // Set up cell factories for table views
+        setupTableCellFactories();
+
+        // Set up editable columns
         tbBlockTable.setEditable(true);
-        tbBTID.setCellValueFactory(block -> block.getValue().blockIDProperty().asObject());
-        tbBTOccupied.setCellValueFactory(block -> block.getValue().occupationProperty());
-        tbBTOccupied.setCellFactory(CheckBoxTableCell.forTableColumn(tbBTOccupied));
-
         tbSwitchTable.setEditable(true);
-        tbSTID.setCellValueFactory(block -> block.getValue().blockIDProperty().asObject());
-        tbSTSwitchTo.setCellValueFactory(block -> block.getValue().switchedBlockIDProperty().asObject());
-        tbSTEnable.setCellValueFactory(block -> block.getValue().switchRequestedStateProperty());
-        tbSTEnable.setCellFactory(CheckBoxTableCell.forTableColumn(tbSTEnable));
 
-        tbSpeedAuthTable.setEditable(true);
-        tbSATID.setCellValueFactory(speedAuth -> speedAuth.getValue().trainIDProperty().asObject());
-        tbSATSpeedIn.setCellValueFactory(speedAuth -> speedAuth.getValue().speedInProperty().asObject());
-        tbSATAuthIn.setCellValueFactory(speedAuth -> speedAuth.getValue().authorityInProperty().asObject());
-        tbSATSpeedOut.setCellValueFactory(speedAuth -> speedAuth.getValue().speedOutProperty().asObject());
-        tbSATAuthOut.setCellValueFactory(speedAuth -> speedAuth.getValue().authorityOutProperty().asObject());
-        tbSATSpeedIn.setCellFactory(TextFieldTableCell.forTableColumn(doubleConverter));
-        tbSATAuthIn.setCellFactory(TextFieldTableCell.forTableColumn(intConverter));
+        // Set up the hardware port combo box
+        tbHWPortComboBox.getItems().add("SW");
+        SerialPort[] ports = SerialPort.getCommPorts();
+        for(SerialPort port : ports) {
+            tbHWPortComboBox.getItems().add(port.getSystemPortName());
+        }
+        tbHWPortComboBox.setValue("SW");
     }
 
-    public void setController(WaysideController controller) {
-        this.controller = controller;
-        readBlockInfo(controller.getSubject().blockListProperty());
-        tbSpeedAuthTable.setItems(controller.getSubject().getSpeedAuthList());
-        if(controller instanceof WaysideControllerHWBridge) {
-            tbHWPortLabel.setText("HW Port: " + ((WaysideControllerHWBridge) controller).getPort());
+    /**
+     * Sets up the cell factories for the table views
+     */
+    private void setupTableCellFactories() {
+        tbBTOccupied.setCellFactory(column -> new TableCell<WaysideBlockSubject, Boolean>() {
+            @Override
+            public void updateItem(Boolean item, boolean empty) {
+                super.updateItem(item, empty);
+
+                if(empty || item == null) {
+                    setGraphic(null);
+                } else {
+                    WaysideBlockSubject block = getTableView().getItems().get(getIndex());
+                    CheckBox checkBox;
+                    {
+                        checkBox = new CheckBox();
+                        checkBox.setSelected(item);
+                        checkBox.setOnAction(event -> {
+                            currentSubject.getController().trackModelSetOccupancy(block.getBlock().getBlockID(), checkBox.isSelected());
+                        });
+                    }
+                    setGraphic(checkBox);
+                }
+            }
+        });
+        tbSTEnable.setCellFactory(column -> new TableCell<WaysideBlockSubject, Boolean>() {
+            @Override
+            public void updateItem(Boolean item, boolean empty) {
+                super.updateItem(item, empty);
+
+                if(empty || item == null) {
+                    setGraphic(null);
+                } else {
+                    WaysideBlockSubject block = getTableView().getItems().get(getIndex());
+                    CheckBox checkBox;
+                    {
+                        checkBox = new CheckBox();
+                        checkBox.setSelected(item);
+                        checkBox.setOnAction(event -> {
+//                            currentSubject.getController().CTCRequestSwitchState(block.getBlock().getBlockID(), checkBox.isSelected());
+                        });
+                    }
+                    setGraphic(checkBox);
+                }
+            }
+        });
+    }
+
+    public void setController(WaysideControllerSubject subject) {
+        this.currentSubject = subject;
+        readBlockInfo(subject.blockListProperty());
+        if(subject.getController() instanceof WaysideControllerHWBridge) {
+            tbHWPortLabel.setText("HW Port: " + ((WaysideControllerHWBridge) subject.getController()).getPort());
         }
         else {
             tbHWPortLabel.setText("HW Port: N/A");
@@ -116,7 +131,7 @@ public class WaysideControllerTB {
         tbBlockTable.setItems(blocks);
         tbSwitchTable.getItems().clear();
         for(WaysideBlockSubject item : blocks) {
-            if(item.isHasSwitch()) {
+            if(item.getBlock().hasSwitch()) {
                 tbSwitchTable.getItems().add(item);
             }
         }

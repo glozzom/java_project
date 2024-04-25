@@ -1,74 +1,70 @@
 package Common;
 
-import waysideController.TrainSpeedAuth;
 import waysideController.WaysideBlock;
-import waysideController.WaysideBlockSubject;
 import waysideController.WaysideControllerSubject;
 
 import java.io.File;
-import java.util.List;
+import java.util.Map;
 
 
 // This is the interface for the wayside controller, which is used to control the various track blocks
 public interface WaysideController {
 
-    // Accessor for PLC program file
-    public File getPLCFile();
-
     // Loads a new PLC program into the wayside controller from a given file
-    public void loadPLC(File PLC);
+    void loadPLC(File PLC);
 
-    public void runPLC();
+    // Runs the PLC program
+    void runPLC();
 
     // Returns whether the wayside controller is in maintenance mode
-    public boolean isMaintenanceMode();
+    boolean isMaintenanceMode();
 
     // Sets whether the wayside controller is in maintenance mode
-    public void setMaintenanceMode(boolean maintenanceMode);
-
-    // Sets whether the wayside controller is in maintenance mode without updating the property
-//    public void setMaintenanceModeNoUpdate(boolean maintenanceMode);
-
-    // Returns the list of block IDs under the wayside controller's control
-//    public List<WaysideBlockSubject> getBlockList();
-
-    // Adds a new track block under the wayside controller's control
-    public void addBlock(WaysideBlock block);
+    void setMaintenanceMode(boolean maintenanceMode);
 
     // Allows Track Model to set train occupancy for a specific block
-    public void trackModelSetOccupancy(int blockID, boolean isOccupied);
+    void trackModelSetOccupancy(int blockID, boolean isOccupied);
 
-    public void CTCSetSpeedAuth(TrainSpeedAuth speedAuth);
+    void CTCSendSpeed(int blockID, double speed);
 
-    // Allows CTC to request a switch change (works with automatic mode)
-    public void CTCRequestSwitchState(int blockID, boolean switchState);
-
-    // Allows CTC to disable a block (works with automatic mode)
-    public void CTCDisableBlock(int blockID);
-
-    // Allows CTC to enable a block (works with automatic mode)
-    public void CTCEnableBlock(int blockID);
+    // Allows CTC to enable or disable a block (works with automatic mode)
+    // Combined the two methods into one for simplicity
+    void CTCChangeBlockMaintenanceState(int blockID, boolean maintenanceState);
 
     // Allows CTC to enable all blocks (works with automatic mode)
-    public void CTCEnableAllBlocks();
+    void CTCEnableAllBlocks();
 
     // Manually sets a switch state in maintenance mode
-    public void maintenanceSetSwitch(int blockID, boolean switchState);
+    void maintenanceSetSwitch(int blockID, boolean switchState);
 
-    public void maintenanceSetAuthority(int blockID, boolean auth);
+    // Manually sets a block authority in maintenance mode
+    void maintenanceSetAuthority(int blockID, boolean auth);
 
     // Manually sets a traffic light state in maintenance mode
-    public void maintenanceSetTrafficLight(int blockID, boolean lightState);
+    void maintenanceSetTrafficLight(int blockID, boolean lightState);
 
     // Manually sets a railroad crossing state in maintenance mode
-    public void maintenanceSetCrossing(int blockID, boolean crossingState);
+    void maintenanceSetCrossing(int blockID, boolean crossingState);
 
     // Returns the ID of the controller
-    public int getID();
+    int getID();
+
+    Map<Integer, WaysideBlock> getBlockMap();
 
     // Returns the subject attached to this controller
-    public WaysideControllerSubject getSubject();
+    WaysideControllerSubject getSubject();
 
+    // Allows a subject to set local variables by name and value
     void setValue(String propertyName, Object newValue);
+
+
+    /**
+     * Sends the authority for a train to the Wayside.
+     * The authority is simply the block ID that the train is allowed to travel to.
+     * This allows the Wayside to stop a train at a specific block or station.
+     * @param blockID The ID of the block the train is located in
+     * @param blockCount The number of blocks the train is allowed to travel
+     */
+    void CTCSendAuthority(int blockID, int blockCount);
 }
 

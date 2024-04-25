@@ -1,19 +1,30 @@
 package Common;
 
-public interface TrainModel {
+import Utilities.Enums.Direction;
+import Utilities.Records.Beacon;
+import Utilities.Records.UpdatedTrainValues;
 
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+
+public interface  TrainModel {
+
+    void delete();
     //----Vital Setter Signals----
     void setEmergencyBrake(boolean brake);
     void setServiceBrake(boolean brake);
     void setPower(double power);
     void setCommandSpeed(double speed);
-    void setActualSpeed(double speed);
+
     void setAuthority(int authority);
     void setNumCars(int numCars);
     void setNumPassengers(int numPassengers);
     void setCrewCount(int crewCount);
     void setGrade(double grade);
-    void setAcceleration(double acceleration);
+    void setDirection(Direction direction);
+    void changeDirection();
+    void passBeacon(Beacon beacon);
+
 
     //Murphy Signals
     void setBrakeFailure(boolean failure);
@@ -25,7 +36,9 @@ public interface TrainModel {
     void setRightDoors(boolean doors);
     void setExtLights(boolean lights);
     void setIntLights(boolean lights);
-    void setTemperature(double temp);
+    void setSetTemperature(double temp);
+    void setAnnouncement(String announcement);
+
 
 
     //Vital Getter Signals
@@ -37,7 +50,9 @@ public interface TrainModel {
     double  getPower();
     boolean getServiceBrake();
     boolean getEmergencyBrake();
-    double  getWeightKG();
+    double  getMass();
+
+    Direction getDirection();
 
     //Murphy Getter Signals
     boolean getBrakeFailure();
@@ -46,26 +61,29 @@ public interface TrainModel {
 
 
     //Non-Vital Getter Signals
-    double  getTemperature();
+    double  getRealTemperature();
     boolean getExtLights();
     boolean getIntLights();
     boolean getLeftDoors();
     boolean getRightDoors();
+    double getlength();
+    int getPassengerCount();
+    int getCrewCount();
+    double getGrade();
+    int getNumCars();
+
+
+
 
     //Vital Functions for simulating the train physics
-    void trainModelPhysics();
-
     void setValue(String propertyName, Object newValue);
+    void changeTimeDelta(int v);
+    double getDistanceTraveled();
 
-    void setTimeDelta(int v);
 
-    int getTimeDelta();
 
-    double getGrade();
+    TrainController getController();
 
-    int getCrewCount();
-
-    int getNumPassengers();
-
-    int getNumCars();
+    void trainModelTimeStep(Future<UpdatedTrainValues> updatedTrainValuesFuture) throws ExecutionException, InterruptedException;
+    void trainModelPhysics() throws ExecutionException, InterruptedException;
 }

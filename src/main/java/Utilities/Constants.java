@@ -1,5 +1,7 @@
 package Utilities;
 
+import Utilities.Enums.Direction;
+
 public class Constants {
 
     // Constants for representing states on the track
@@ -20,6 +22,9 @@ public class Constants {
     final public static boolean RED_LINE = false;
     final public static boolean GREEN_LINE = true;
 
+    final public static Direction YARD_OUT_DIRECTION = Direction.NORTH;
+
+    final public static int YARD_OUT_BLOCK = 0;
 
     //Physics Constants
     final public static double GRAVITY = 9.81; // m/s^2
@@ -38,4 +43,6 @@ public class Constants {
     final public static double MAX_SPEED = 19.44; // m/s
     final public static double MAX_POWER = 480.0; // kW
     final public static double MAX_ENGINE_FORCE = 40000; //N
+    final public static int MAX_PASSENGERS = 222;
 }
+

@@ -1,0 +1,32 @@
+// Controls Sections I-K and U-W, blocks 36-68 and 110-143
+// Can see authorities 32-72 and 106-147
+
+// I Occupancies
+for i = 36 to 57 do
+    authority[i] = not occupied[i+1] and not occupied[i+2] and not occupied[i+3] and not occupied[i+4]
+endfor
+
+// J Occupancies
+for i = 58 to 62 do
+    authority[i] = not occupied[i+1] and not occupied[i+2] and not occupied[i+3] and not occupied[i+4]
+endfor
+
+// K Occupancies
+for i = 63 to 68 do
+    authority[i] = not occupied[i+1] and not occupied[i+2] and not occupied[i+3] and not occupied[i+4]
+endfor
+
+// U Occupancies
+for i = 110 to 116 do
+    authority[i] = not occupied[i+1] and not occupied[i+2] and not occupied[i+3] and not occupied[i+4]
+endfor
+
+// V Occupancies
+for i = 117 to 121 do
+    authority[i] = not occupied[i+1] and not occupied[i+2] and not occupied[i+3] and not occupied[i+4]
+endfor
+
+// W Occupancies
+for i = 122 to 143 do
+    authority[i] = not occupied[i+1] and not occupied[i+2] and not occupied[i+3] and not occupied[i+4]
+endfor

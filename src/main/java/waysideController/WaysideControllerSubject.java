@@ -2,7 +2,7 @@ package waysideController;
 
 import Common.WaysideController;
 import Framework.Support.AbstractSubject;
-import Framework.Support.Notifications;
+import Framework.Support.Notifier;
 import Framework.Support.ObservableHashMap;
 import javafx.application.Platform;
 import javafx.beans.property.*;
@@ -17,24 +17,26 @@ import java.util.concurrent.TimeUnit;
 
 import static waysideController.Properties.*;
 
-public class WaysideControllerSubject implements AbstractSubject, Notifications {
+public class WaysideControllerSubject implements AbstractSubject, Notifier {
 
     private final ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
-    private WaysideController controller;
-    private ObservableList<WaysideBlockSubject> blockList;
-    private ObservableList<TrainSpeedAuth> speedAuthList;
+    private final WaysideController controller;
+    private final ObservableList<WaysideBlockSubject> blockList;
 
     private final ObservableHashMap<String, Property<?>> properties = new ObservableHashMap<>();
     public boolean isLogicUpdate = false;
     public boolean isGUIUpdate = false;
 
+    /**
+     * Constructor for the WaysideControllerSubject
+     * @param controller The wayside controller that this subject is observing
+     */
     public WaysideControllerSubject(WaysideController controller) {
         this.controller = controller;
         properties.put(maintenanceMode_p, new SimpleBooleanProperty(controller.isMaintenanceMode()));
         properties.put(PLCName_p, new SimpleStringProperty());
         properties.put(activePLCColor_p, new SimpleObjectProperty<>(Color.GRAY));
         blockList = FXCollections.observableArrayList();
-        speedAuthList = FXCollections.observableArrayList();
 
 //        properties.get(maintenanceMode_p).addListener((observable, oldValue, newValue) -> controller.setMaintenanceMode((Boolean) newValue));
     }
@@ -129,25 +131,16 @@ public class WaysideControllerSubject implements AbstractSubject, Notifications 
             getPaintProperty(activePLCColor_p).set(Color.GRAY);
     }
     public void addBlock(WaysideBlockSubject block) {
+
         blockList.add(block);
-        block.occupationProperty().addListener((observable, oldValue, newValue) -> controller.trackModelSetOccupancy(block.getBlockID(), newValue));
-        block.switchStateProperty().addListener((observable, oldValue, newValue) -> controller.maintenanceSetSwitch(block.getBlockID(), newValue));
-        block.lightStateProperty().lightStateProperty().addListener((observable, oldValue, newValue) -> controller.maintenanceSetTrafficLight(block.getBlockID(), newValue));
-        block.crossingStateProperty().addListener((observable, oldValue, newValue) -> controller.maintenanceSetCrossing(block.getBlockID(), newValue));
-        block.switchRequestedStateProperty().addListener((observable, oldValue, newValue) -> controller.CTCRequestSwitchState(block.getBlockID(), newValue));
-        block.authorityProperty().addListener((observable, oldValue, newValue) -> controller.maintenanceSetAuthority(block.getBlockID(), newValue));
     }
+
+    /**
+     * Get the wayside controller
+     * @return The wayside controller
+     */
     public WaysideController getController() {
         return this.controller;
     }
-    public ObservableList<TrainSpeedAuth> getSpeedAuthList() {
-        return speedAuthList;
-    }
-    public void setSpeedAuth(TrainSpeedAuth speedAuth) {
-        if(speedAuthList.contains(speedAuth)) {
-            speedAuthList.set(speedAuthList.indexOf(speedAuth), speedAuth);
-        } else {
-            speedAuthList.add(speedAuth);
-        }
-    }
+
 }

@@ -1,0 +1,109 @@
+// Controls sections A, B, C, D, E, F, G, H, X, Y, Z blocks 1-35, 144-150
+// Accesses occupancies from blocks 1-39, 144-150
+
+if dir_assigned[13]
+    if not occupied[1] and not occupied[12] and not occupied[13] and not occupied[14] and not occupied[15] and not occupied[16] and not occupied[17] and not occupied[18] and not occupied[19] and not occupied[20] and not occupied[21] and not occupied[22] and not occupied[23] and not occupied[24] and not occupied[25] and not occupied[26] and not occupied[27] and not occupied[28] and not occupied[29] and not occupied[150]
+
+        if direction[13] and not occupied[149] and not occupied[148] and not occupied[147] and not occupied[146] and not occupied[145] and not occupied[144] or not direction[13] and not occupied[2] and not occupied[3] and not occupied[4] and not occupied[5] and not occupied[6] and not occupied[7]
+            dir_assigned[13] = FALSE
+            switch[13] = MAIN
+            switch[28] = MAIN
+            for i = 13 to 28 do
+                authority[i] = FALSE
+            endfor
+        endif
+    endif
+endif
+
+if not dir_assigned[13]
+    if occupied[7] or occupied[6] or occupied[5] or occupied[4]
+        if not occupied[13] and not occupied[14] and not occupied[15] and not occupied[16] and not occupied[17] and not occupied[18] and not occupied[19] and not occupied[20] and not occupied[21] and not occupied[22] and not occupied[23] and not occupied[24] and not occupied[25] and not occupied[26] and not occupied[27] and not occupied[28]
+            dir_assigned[13] = TRUE
+            direction[13] = SOUTHBOUND
+            switch[13] = ALT
+            switch[28] = MAIN
+        endif
+    else
+        if occupied[144] or occupied[145] or occupied[146] or occupied[147]
+            if not occupied[13] and not occupied[14] and not occupied[15] and not occupied[16] and not occupied[17] and not occupied[18] and not occupied[19] and not occupied[20] and not occupied[21] and not occupied[22] and not occupied[23] and not occupied[24] and not occupied[25] and not occupied[26] and not occupied[27] and not occupied[28]
+                dir_assigned[13] = TRUE
+                direction[13] = NORTHBOUND
+                switch[13] = MAIN
+                switch[28] = ALT
+            endif
+        endif
+    endif
+endif
+
+// Switch 1-13-12
+//if not occupied[13] and dir_assigned[20]
+//    switch[12] = direction[20] == OUTBOUND
+//endif
+
+// General occupancies A
+authority[1] = not occupied[13] and not occupied[14] and not occupied[15] and not occupied[16] and switch[13]
+authority[2] = not occupied[1] and not occupied[13] and not occupied[14] and not occupied[15] and switch[13]
+authority[3] = not occupied[2] and not occupied[1] and not occupied[13] and not occupied[14] and switch[13]
+
+// General occupancies B
+authority[4] = not occupied[3] and not occupied[2] and not occupied[1] and not occupied[13] and switch[13]
+authority[5] = not occupied[4] and not occupied[3] and not occupied[2] and not occupied[1]
+authority[6] = not occupied[5] and not occupied[4] and not occupied[3] and not occupied[2]
+
+// General occupancies C
+for i = 7 to 12 do
+    authority[i] = not occupied[i-1] and not occupied[i-2] and not occupied[i-3] and not occupied[i-4]
+endfor
+
+// General occupancies D,E,F
+if dir_assigned[13]
+    if direction[13] == NORTHBOUND
+        for i = 13 to 16 do
+            authority[i] = not occupied[i-1] and not occupied[i-2] and not occupied[i-3] and not occupied[i-4] and not switch[13]
+        endfor
+
+        for i = 17 to 28 do
+            authority[i] = not occupied[i-1] and not occupied[i-2] and not occupied[i-3] and not occupied[i-4]
+        endfor
+    else
+        for i = 13 to 24 do
+            authority[i] = not occupied[i+1] and not occupied[i+2] and not occupied[i+3] and not occupied[i+4]
+        endfor
+
+        for i = 25 to 28 do
+            authority[i] = not occupied[i+1] and not occupied[i+2] and not occupied[i+3] and not occupied[i+4] and not switch[28]
+        endfor
+
+    endif
+else
+    for i = 13 to 28 do
+        authority[i] = FALSE
+    endfor
+endif
+
+// General occupancies G-H
+for i = 29 to 35 do
+    authority[i] = not occupied[i+1] and not occupied[i+2] and not occupied[i+3] and not occupied[i+4]
+endfor
+
+// General occupancies X
+for i = 144 to 146 do
+    authority[i] = not occupied[i+1] and not occupied[i+2] and not occupied[i+3] and not occupied[i+4]
+endfor
+
+// General occupancies Y
+authority[147] = not occupied[148] and not occupied[149] and not occupied[150] and not occupied[28] and switch[28]
+authority[148] = not occupied[149] and not occupied[150] and not occupied[28] and not occupied[27] and switch[28]
+authority[149] = not occupied[150] and not occupied[28] and not occupied[27] and not occupied[26] and switch[28]
+
+// General occupancies Z
+authority[150] = not occupied[28] and not occupied[27] and not occupied[26] and not occupied[25] and switch[28]
+
+// Crossings
+crossing[19] = not occupied[18] and not occupied[19] and not occupied[20]
+
+// Lights
+light[1] = dir_assigned[13] and not direction[13] and switch[13]
+light[13] = dir_assigned[13] and direction[13] and not switch[13]
+light[28] = dir_assigned[13] and not direction[13] and not switch[28]
+light[150] = dir_assigned[13] and direction[13] and switch[28]

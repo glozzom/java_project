@@ -1,8 +1,9 @@
 package waysideController;
 
 import Common.WaysideController;
+import Framework.Simulation.WaysideSystem;
 import Framework.Support.ListenerReference;
-import com.fazecast.jSerialComm.SerialPort;
+import Utilities.Enums.Lines;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
@@ -13,7 +14,6 @@ import javafx.fxml.FXMLLoader;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.control.cell.CheckBoxTableCell;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Paint;
@@ -46,6 +46,8 @@ public class WaysideControllerManager {
     @FXML
     private TableColumn<WaysideBlockSubject, Boolean> blockTableAuthColumn;
     @FXML
+    private TableColumn<WaysideBlockSubject, Double> blockTableSpeedColumn;
+    @FXML
     private TableView<WaysideBlockSubject> switchTable;
     @FXML
     private TableColumn<WaysideBlockSubject, Integer> switchTableIDColumn;
@@ -60,14 +62,13 @@ public class WaysideControllerManager {
     @FXML
     private TableView<File> plcFileTable;
     @FXML
-    public TableColumn<File,String> plcFileNameColumn;
+    private TableColumn<File,String> plcFileNameColumn;
     @FXML
-    public TableColumn<File,String> plcFileDateModifiedColumn;
+    private TableColumn<File,String> plcFileDateModifiedColumn;
     @FXML
     private Button plcFolderButton;
     @FXML
     private Button plcUploadButton;
-
     @FXML
     private ProgressBar uploadProgressBar;
     @FXML
@@ -89,12 +90,11 @@ public class WaysideControllerManager {
         // Launch the test bench
         testBench = launchTestBench();
 
+
         // Set up event listeners
         plcFolderButton.setOnAction(event -> pickFolder());
         plcFolderTextField.setOnAction(event -> updatePLCTableView(new File(plcFolderTextField.getText())));
         plcUploadButton.setOnAction(event ->  uploadPLC());
-        switchTable.setEditable(true);
-        blockTable.setEditable(true);
         testBench.tbCreateNewControllerButton.setOnAction(event -> createNewController());
         changeControllerComboBox.setOnAction(event -> changeActiveController(changeControllerComboBox.getValue()));
         maintenanceModeCheckbox.setOnAction(event -> {
@@ -102,20 +102,68 @@ public class WaysideControllerManager {
             updateMaintenanceWriteable();
         });
 
-        testBench.tbHWPortComboBox.getItems().add("SW");
-        SerialPort[] ports = SerialPort.getCommPorts();
-        for(SerialPort port : ports) {
-            testBench.tbHWPortComboBox.getItems().add(port.getSystemPortName());
-        }
-        testBench.tbHWPortComboBox.setValue("SW");
 
-        // Set up cell factories for table views
-        blockTableIDColumn.setCellValueFactory(block -> block.getValue().blockIDProperty().asObject());
-        blockTableCircuitColumn.setCellValueFactory(block -> block.getValue().occupationProperty());
-        blockTableLightsColumn.setCellValueFactory(block -> block.getValue().lightStateProperty().lightColorProperty());
+        // Set up cell value factories for table views
+        blockTableIDColumn.setCellValueFactory(block -> block.getValue().getIntegerProperty(blockID_p).asObject());
+        blockTableCircuitColumn.setCellValueFactory(block -> block.getValue().getBooleanProperty(occupied_p));
+        blockTableLightsColumn.setCellValueFactory(block -> block.getValue().getTrafficLightColor());
+        blockTableCrossingColumn.setCellValueFactory(block -> block.getValue().getBooleanProperty(crossingState_p));
+        blockTableAuthColumn.setCellValueFactory(block -> block.getValue().getBooleanProperty(authority_p));
+        blockTableSpeedColumn.setCellValueFactory(block -> block.getValue().getDoubleProperty(speed_p).asObject());
+
+        switchTableIDColumn.setCellValueFactory(block -> block.getValue().getIntegerProperty(switchBlockParent_p).asObject());
+        switchTableBlockOutColumn.setCellValueFactory(block -> block.getValue().getIntegerProperty(switchedBlockID_p).asObject());
+        switchTableStateColumn.setCellValueFactory(block -> block.getValue().getBooleanProperty(switchState_p));
+
+        plcFileNameColumn.setCellValueFactory(file -> new ReadOnlyObjectWrapper<>(file.getValue().getName()));
+        plcFileDateModifiedColumn.setCellValueFactory(file -> new ReadOnlyObjectWrapper<>(dateFormat.format(new Date(file.getValue().lastModified()))));
+        plcFileTable.setOnMousePressed(mouseEvent -> {
+            if(mouseEvent.isPrimaryButtonDown() && mouseEvent.getClickCount() >= 2)
+                uploadPLC();
+        });
+
+
+        // Set cell factories for editable columns
+        setupTableCellFactories();
+
+
+        // Set up editable columns
+        blockTable.setEditable(true);
+        blockTableCrossingColumn.setEditable(false);
+        blockTableCircuitColumn.setEditable(false);
+
+        switchTable.setEditable(true);
+        switchTableStateColumn.setEditable(false);
+
+
+        // Setup controller combo box
+        changeControllerComboBox.itemsProperty().bindBidirectional(WaysideSystem.getControllerList());
+
+        // Create initial controller and update values
+//        createNewController();
+        changeActiveController(WaysideSystem.getController(Lines.GREEN, 1));
+        testBench.setController(currentSubject);
+
+        // Set default folder for PLC:
+        File dir = new File("src/main/antlr");
+        plcFolderTextField.setText(dir.getPath());
+        updatePLCTableView(dir);
+
+        // Some testing of code triggered events:
+//        currentSubject.getController().setMaintenanceMode(true);
+//        currentSubject.getController().maintenanceSetAuthority(1, false);
+//        currentSubject.getController().maintenanceSetSwitch(5, true);
+//        currentSubject.getController().maintenanceSetTrafficLight(6, false);
+//        currentSubject.getController().maintenanceSetCrossing(3, false);
+    }
+
+    /**
+     * Sets up the cell factories for the table views
+     */
+    private void setupTableCellFactories() {
         blockTableLightsColumn.setCellFactory(column -> new TableCell<WaysideBlockSubject, Paint>() {
-            private BorderPane graphic;
-            private Circle circle;
+            private final BorderPane graphic;
+            private final Circle circle;
 
             {
                 graphic = new BorderPane();
@@ -123,8 +171,8 @@ public class WaysideControllerManager {
                 graphic.setCenter(circle);
                 setOnMouseClicked(event -> {
                     if(currentSubject.getBooleanProperty(maintenanceMode_p).get()) {
-                        if(this.getTableRow().getItem().hasLight()) {
-                            this.getTableRow().getItem().setLightState(!this.getTableRow().getItem().getLightState());
+                        if(this.getTableRow().getItem().getBlock().hasLight()) {
+                            currentSubject.getController().maintenanceSetTrafficLight(this.getTableRow().getItem().getBlock().getBlockID(), !this.getTableRow().getItem().getBlock().getLightState());
                         }
                     }
                 });
@@ -136,7 +184,6 @@ public class WaysideControllerManager {
                 setGraphic(graphic);
             }
         });
-        blockTableCrossingColumn.setCellValueFactory(block -> block.getValue().crossingStateProperty());
 
         blockTableCrossingColumn.setCellFactory(column -> new TableCell<WaysideBlockSubject, Boolean>() {
             @Override
@@ -145,19 +192,17 @@ public class WaysideControllerManager {
 
                 if(empty || item == null) {
                     setGraphic(null);
-                    return;
                 } else {
                     WaysideBlockSubject blockInfo = getTableView().getItems().get(getIndex());
-                    if(blockInfo.hasCrossing()) {
+                    if(blockInfo.getBlock().hasCrossing()) {
                         CheckBox checkBox;
                         {
                             checkBox = new CheckBox();
                             checkBox.setDisable(!currentSubject.getBooleanProperty(maintenanceMode_p).get());
+                            checkBox.setOpacity(1.0);
                             checkBox.setSelected(item);
                             checkBox.setOnMouseClicked(event -> {
-                                if(currentSubject.getBooleanProperty(maintenanceMode_p).get()) {
-                                    this.getTableRow().getItem().setCrossingState(!this.getTableRow().getItem().isCrossingState());
-                                }
+                                currentSubject.getController().maintenanceSetCrossing(blockInfo.getBlock().getBlockID(), checkBox.isSelected());
                             });
                         }
                         setGraphic(checkBox);
@@ -168,36 +213,63 @@ public class WaysideControllerManager {
 
             }
         });
-        blockTableAuthColumn.setCellValueFactory(block -> block.getValue().authorityProperty());
-        blockTableAuthColumn.setCellFactory(CheckBoxTableCell.forTableColumn(blockTableAuthColumn));
-        blockTableCrossingColumn.setEditable(false);
-        blockTableCircuitColumn.setEditable(false);
+        blockTableAuthColumn.setCellFactory(column -> new TableCell<WaysideBlockSubject, Boolean>() {
+            @Override
+            public void updateItem(Boolean item, boolean empty) {
+                super.updateItem(item, empty);
 
-        switchTable.setEditable(true);
-        switchTableIDColumn.setCellValueFactory(block -> block.getValue().blockIDProperty().asObject());
-        switchTableBlockOutColumn.setCellValueFactory(block -> block.getValue().switchedBlockIDProperty().asObject());
-        switchTableStateColumn.setCellValueFactory(block -> block.getValue().switchStateProperty());
-        switchTableStateColumn.setCellFactory(CheckBoxTableCell.forTableColumn(switchTableStateColumn));
-        switchTableStateColumn.setEditable(false);
+                if(empty || item == null) {
+                    setGraphic(null);
+                } else {
+                    WaysideBlockSubject block = getTableView().getItems().get(getIndex());
+                    CheckBox checkBox;
+                    {
+                        checkBox = new CheckBox();
+                        checkBox.setSelected(item);
+                        checkBox.setDisable(!currentSubject.getBooleanProperty(maintenanceMode_p).get());
+                        checkBox.setOpacity(1.0);
+                        checkBox.setOnAction(event -> {
+                            currentSubject.getController().maintenanceSetAuthority(block.getBlock().getBlockID(), checkBox.isSelected());
+                        });
+                    }
+                    setGraphic(checkBox);
+                }
+            }
+        });
+        switchTableStateColumn.setCellFactory(column -> new TableCell<WaysideBlockSubject, Boolean>() {
+            @Override
+            public void updateItem(Boolean item, boolean empty) {
+                super.updateItem(item, empty);
 
-        plcFileNameColumn.setCellValueFactory(file -> new ReadOnlyObjectWrapper<>(file.getValue().getName()));
-        plcFileDateModifiedColumn.setCellValueFactory(file -> new ReadOnlyObjectWrapper<>(dateFormat.format(new Date(file.getValue().lastModified()))));
-
-        changeControllerComboBox.itemsProperty().bindBidirectional(WaysideControllerSubjectFactory.getControllerList());
-
-        // Create initial controller and update values
-        createNewController();
-        testBench.setController(currentSubject.getController());
-
-        currentSubject.getController().setMaintenanceMode(true);
-//        currentSubject.getController().mai
+                if(empty || item == null) {
+                    setGraphic(null);
+                } else {
+                    WaysideBlockSubject block = getTableView().getItems().get(getIndex());
+                    CheckBox checkBox;
+                    {
+                        checkBox = new CheckBox();
+                        checkBox.setSelected(item);
+                        checkBox.setDisable(!currentSubject.getBooleanProperty(maintenanceMode_p).get());
+                        checkBox.setOpacity(1.0);
+                        checkBox.setOnAction(event -> {
+                            currentSubject.getController().maintenanceSetSwitch(block.getBlock().getBlockID(), checkBox.isSelected());
+                        });
+                    }
+                    setGraphic(checkBox);
+                }
+            }
+        });
     }
 
+    /**
+     * Updates the maintenance mode checkbox and the editable state of the table columns
+     */
     private void updateMaintenanceWriteable() {
         maintenanceModeCheckbox.setSelected(currentSubject.getBooleanProperty(maintenanceMode_p).get());
         switchTableStateColumn.setEditable(maintenanceModeCheckbox.isSelected());
         blockTableAuthColumn.setEditable(maintenanceModeCheckbox.isSelected());
         blockTable.refresh();
+        switchTable.refresh();
     }
 
     /**
@@ -244,21 +316,15 @@ public class WaysideControllerManager {
     }
 
     /**
-     * Updates the block list in the GUI with the information from the current wayside controller
+     * Updates the block list and switch list in the GUI with the information from the current wayside controller
      */
     private void updateBlockList() {
-        blockTable.setItems(currentSubject.blockListProperty());
-        updateSwitchList();
-    }
-
-    /**
-     * Updates the switch list in the GUI with the information from the current wayside controller
-     */
-    private void updateSwitchList() {
-        switchTable.getItems().clear();
         ObservableList<WaysideBlockSubject> blocks = currentSubject.blockListProperty();
+
+        blockTable.setItems(blocks);
+        switchTable.getItems().clear();
         for(WaysideBlockSubject item : blocks) {
-            if(item.isHasSwitch()) {
+            if(item.getBlock().hasSwitch()) {
                 switchTable.getItems().add(item);
             }
         }
@@ -270,11 +336,42 @@ public class WaysideControllerManager {
     private void createNewController() {
         WaysideController newController;
         if(testBench.tbHWPortComboBox.getValue().equals("SW")) {
-            newController = new WaysideControllerImpl(WaysideControllerSubjectFactory.size(), 0);
+            newController = new WaysideControllerImpl(WaysideSystem.size(),
+                    Lines.GREEN,
+                    new int[]{
+                            1, 2, 3,
+                            4, 5, 6,
+                            7, 8, 9, 10, 11, 12,
+                            13, 14, 15, 16,
+                            17, 18, 19, 20,
+                            21, 22, 23, 24, 25, 26, 27, 28,
+                            29, 30, 31, 32,
+                            33, 34, 35,
+                            36, 37, 38, 39,
+                            144, 145, 146,
+                            147, 148, 149,
+                            150},
+                    null, null);
         } else {
-            newController = new WaysideControllerHWBridge(WaysideControllerSubjectFactory.size(), 0, testBench.tbHWPortComboBox.getValue());
+            newController = new WaysideControllerHWBridge(WaysideSystem.size(),
+                    Lines.GREEN,
+                    new int[]{
+                            1, 2, 3,
+                            4, 5, 6,
+                            7, 8, 9, 10, 11, 12,
+                            13, 14, 15, 16,
+                            17, 18, 19, 20,
+                            21, 22, 23, 24, 25, 26, 27, 28,
+                            29, 30, 31, 32,
+                            33, 34, 35,
+                            36, 37, 38, 39,
+                            144, 145, 146,
+                            147, 148, 149,
+                            150},
+                    testBench.tbHWPortComboBox.getValue());
         }
-        WaysideControllerSubjectFactory.addController(newController);
+
+        WaysideSystem.addController(newController, Lines.GREEN);
         changeActiveController(newController);
     }
 
@@ -302,9 +399,9 @@ public class WaysideControllerManager {
         plcCurrentFileLabel.textProperty().bindBidirectional(currentSubject.getStringProperty(PLCName_p));
         plcActiveIndicator.fillProperty().bindBidirectional(currentSubject.getPaintProperty(activePLCColor_p));
 
-        testBench.setController(controller);
+        testBench.setController(controller.getSubject());
 
-        currentSubject.getController().runPLC();
+        // Update block lists
         updateMaintenanceWriteable();
         updateBlockList();
     }
@@ -314,6 +411,10 @@ public class WaysideControllerManager {
         listenerReferences.add(new ListenerReference<>(observable, listener));
     }
 
+    /**
+     * Launches the wayside controller test bench
+     * @return The controller for the test bench
+     */
     private WaysideControllerTB launchTestBench() {
         System.out.println(System.getProperty("Preparing to launch test bench"));
         try {

@@ -1,134 +1,317 @@
 package waysideController;
 
+import org.antlr.v4.runtime.CharStreams;
+import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.tree.AbstractParseTreeVisitor;
+import org.antlr.v4.runtime.tree.ParseTree;
+import waysideController.plc_parser.PLCLexer;
+import waysideController.plc_parser.PLCParser;
+import waysideController.plc_parser.PLCVisitor;
+import waysideController.plc_parser.Value;
+
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import static Utilities.Constants.*;
-
-public class PLCProgram {
-//    private final Map<Integer, Boolean> occupancyList;
-//    private final Map<Integer, Boolean> switchStateList;
-//    private final Map<Integer, Boolean> switchRequestedStateList;
-//    private final Map<Integer, Boolean> trafficLightList;
-//    private final Map<Integer, Boolean> crossingList;
-//    private final Map<Integer, Boolean> authList;
-//    private final Map<Integer, Double> speedList;
+public class PLCProgram extends AbstractParseTreeVisitor<Value> implements PLCVisitor<Value> {
 
     private final Map<Integer, WaysideBlock> blockMap;
-
     private final PLCRunner controller;
+    private ParseTree PLCTree;
+    private final Map<String, Integer> intVarMap;
+    private final Map<Integer, Boolean> dir_assignedMap;
+    private final Map<Integer, Boolean> directionMap;
 
     public PLCProgram(PLCRunner controller) {
-        this.blockMap = controller.getBlockMap();
-//        occupancyList = new HashMap<>();
-//        switchStateList = new HashMap<>();
-//        switchRequestedStateList = new HashMap<>();
-//        trafficLightList = new HashMap<>();
-//        crossingList = new HashMap<>();
-//        authList = new HashMap<>();
-//        speedList = new HashMap<>();
-//
-//        for(int i = 1; i <= 15; i++) {
-//            occupancyList.put(i, false);
-//        }
-//
-//        switchStateList.put(5, SWITCH_MAIN);
-//        switchRequestedStateList.put(5, SWITCH_MAIN);
-//        trafficLightList.put(6, LIGHT_RED);
-//        trafficLightList.put(11, LIGHT_RED);
-//        crossingList.put(3, CROSSING_OPEN);
-
         this.controller = controller;
+        this.blockMap = controller.getBlockMap();
+
+        intVarMap = new HashMap<>();
+        dir_assignedMap = new HashMap<>();
+        directionMap = new HashMap<>();
+    }
+
+    public void loadPLC(String filename) {
+        try {
+            PLCLexer lexer = new PLCLexer(CharStreams.fromFileName(filename));
+            PLCParser parser = new PLCParser(new CommonTokenStream(lexer));
+            PLCTree = parser.program();
+//            run();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void run() {
+        if(PLCTree != null) {
+            visit(PLCTree);
+//            System.out.println("PLC program executed");
+        }
     }
 
     private void setSwitch(int blockID, boolean switchState) {
-//        switchStateList.put(blockID, switchState);
-        blockMap.get(blockID).setSwitchState(switchState);
+//        blockMap.get(blockID).setSwitchState(switchState);
         controller.setSwitchPLC(blockID, switchState);
     }
 
     private void setLight(int blockID, boolean lightState) {
-//        trafficLightList.put(blockID, lightState);
-        blockMap.get(blockID).setLightState(lightState);
+//        blockMap.get(blockID).setLightState(lightState);
         controller.setTrafficLightPLC(blockID, lightState);
     }
 
     private void setCrossing(int blockID, boolean crossingState) {
-//        crossingList.put(blockID, crossingState);
-        blockMap.get(blockID).setCrossingState(crossingState);
+//        blockMap.get(blockID).setCrossingState(crossingState);
         controller.setCrossingPLC(blockID, crossingState);
     }
 
     private void setAuth(int blockID, boolean auth) {
-//        authList.put(blockID, auth);
-        blockMap.get(blockID).setAuthority(auth);
+//        blockMap.get(blockID).setBooleanAuth(auth);
         controller.setAuthorityPLC(blockID, auth);
     }
 
-    public void runBlueLine() {
+    @Override
+    public Value visitProgram(PLCParser.ProgramContext ctx) {
+        return visitChildren(ctx);
+    }
 
-        // Process switch state requests
-        System.out.println("State of switch is " + blockMap.get(5).getSwitchState());
-        if(blockMap.get(5).getSwitchState() != blockMap.get(5).getSwitchRequest()) {
-            if(!blockMap.get(5).isOccupied() && !blockMap.get(6).isOccupied() && !blockMap.get(11).isOccupied()) {
-                setSwitch(5, blockMap.get(5).getSwitchRequest());
-                System.out.println("Swapping switch state");
+    @Override
+    public Value visitStatement(PLCParser.StatementContext ctx) {
+        return visitChildren(ctx);
+    }
+
+    @Override
+    public Value visitSet_list_value(PLCParser.Set_list_valueContext ctx) {
+        int index = visit(ctx.index()).asInteger();
+        String listName = visit(ctx.list_name()).asString();
+        boolean value = visit(ctx.getChild(5)).asBoolean();
+
+//        System.out.println(listName + "[" + index + "] = " + value);
+
+        switch (listName) {
+            case "crossing":
+                setCrossing(index, value);
+                break;
+            case "light":
+                setLight(index, value);
+                break;
+            case "switch":
+                setSwitch(index, value);
+                break;
+            case "authority":
+                setAuth(index, value);
+                break;
+            case "direction":
+                directionMap.put(index, value);
+                break;
+            case "dir_assigned":
+                dir_assignedMap.put(index, value);
+                break;
+            default:
+                throw new RuntimeException("Unknown list name: " + listName);
+        }
+
+        return new Value(value);
+    }
+
+    @Override
+    public Value visitIf_statement(PLCParser.If_statementContext ctx) {
+        boolean conditional = visit(ctx.getChild(1)).asBoolean();
+
+        if(conditional) {
+            for(PLCParser.StatementContext statement : ctx.statement()) {
+                visit(statement);
+            }
+        }
+        return new Value(conditional);
+    }
+
+    @Override
+    public Value visitIf_else_statement(PLCParser.If_else_statementContext ctx) {
+        boolean conditional = visit(ctx.getChild(1)).asBoolean();
+
+        int index = 2;
+        for(; index < ctx.getChildCount(); index++) {
+            ParseTree statement = ctx.getChild(index);
+            if(conditional && statement instanceof PLCParser.StatementContext)
+                visit(statement);
+
+            else if(statement.getText().equals("else"))
+                break;
+        }
+        if(!conditional) {
+            for(; index < ctx.getChildCount(); index++) {
+                ParseTree statement = ctx.getChild(index);
+                if(statement instanceof PLCParser.StatementContext)
+                    visit(statement);
+            }
+        }
+        return new Value(conditional);
+    }
+
+
+
+    public Value visitFor_statement(PLCParser.For_statementContext ctx) {
+        int startIndex = visit(ctx.index(0)).asInteger();
+        int endIndex = visit(ctx.index(1)).asInteger();
+        String varName = ctx.VARIABLE().getText();
+
+//        System.out.println("For loop: " + varName + " = " + startIndex + " to " + endIndex);
+
+        for (int i = startIndex; i <= endIndex; i++) {
+            intVarMap.put(varName, i);
+            for (PLCParser.StatementContext statementCtx : ctx.statement()) {
+//                System.out.println("Executing statement: " + statementCtx.getText());
+                visit(statementCtx);
             }
         }
 
-        // Set traffic lights
-        if(!blockMap.get(1).isOccupied() && !blockMap.get(2).isOccupied() && !blockMap.get(3).isOccupied() && !blockMap.get(4).isOccupied() && !blockMap.get(5).isOccupied()) {
-            if(blockMap.get(5).getSwitchState() == SWITCH_MAIN) {
-                setLight(6, LIGHT_GREEN);
-                setLight(11, LIGHT_RED);
+        intVarMap.remove(varName);
+        return Value.VOID;
+    }
+
+    @Override
+    public Value visitEquality_check(PLCParser.Equality_checkContext ctx) {
+        return visitChildren(ctx);
+    }
+
+    @Override
+    public Value visitEquals_statement(PLCParser.Equals_statementContext ctx) {
+        boolean left = visit(ctx.compound_value(0)).asBoolean();
+        boolean right = visit(ctx.getChild(2)).asBoolean();
+        return new Value(left == right);
+    }
+
+    @Override
+    public Value visitNot_equals_statement(PLCParser.Not_equals_statementContext ctx) {
+        boolean left = visit(ctx.compound_value(0)).asBoolean();
+        boolean right = visit(ctx.getChild(2)).asBoolean();
+        return new Value(left != right);
+    }
+
+    @Override
+    public Value visitCompound_value(PLCParser.Compound_valueContext ctx) {
+        return visitChildren(ctx);
+    }
+
+    @Override
+    public Value visitOr_operator(PLCParser.Or_operatorContext ctx) {
+        for(int i = 0; i < ctx.getChildCount(); i++) {
+            ParseTree child = ctx.getChild(i);
+            if(child instanceof PLCParser.Single_valContext | child instanceof PLCParser.Compound_valueContext | child instanceof PLCParser.And_operatorContext) {
+                if (visit(child).asBoolean()) {
+                    return new Value(true);
+                }
             }
-            else {
-                setLight(6, LIGHT_RED);
-                setLight(11, LIGHT_GREEN);
+        }
+
+        return new Value(false);
+    }
+
+    @Override
+    public Value visitAnd_operator(PLCParser.And_operatorContext ctx) {
+        for(int i = 0; i < ctx.getChildCount(); i++) {
+            ParseTree child = ctx.getChild(i);
+            if(child instanceof PLCParser.Single_valContext | child instanceof PLCParser.Compound_valueContext) {
+                if (!visit(child).asBoolean()) {
+                    return new Value(false);
+                }
             }
         }
+
+        return new Value(true);
+    }
+
+    @Override
+    public Value visitSingle_val(PLCParser.Single_valContext ctx) {
+        return visitChildren(ctx);
+    }
+
+    @Override
+    public Value visitNot_operator(PLCParser.Not_operatorContext ctx) {
+        Boolean right = visit(ctx.list_value()).asBoolean();
+        return new Value(!right);
+    }
+
+    @Override
+    public Value visitList_value(PLCParser.List_valueContext ctx) {
+        int index = visit(ctx.index()).asInteger();
+        String listName = visit(ctx.list_name()).asString();
+
+        switch(listName) {
+            case "occupied":
+                WaysideBlock block = blockMap.get(index);
+                if(block != null)
+                    return new Value(block.isOccupied());
+                else {
+                    return new Value(controller.getOutsideOccupancy(index));
+                }
+            case "crossing":
+                return new Value(blockMap.get(index).getCrossingState());
+            case "light":
+                return new Value(blockMap.get(index).getLightState());
+            case "switch":
+                return new Value(blockMap.get(index).getSwitchState());
+            case "authority":
+                return new Value(blockMap.get(index).getBooleanAuth());
+            case "direction":
+                if(!directionMap.containsKey(index))
+                    directionMap.put(index, false);
+                return new Value(directionMap.get(index));
+            case "dir_assigned":
+                if(!dir_assignedMap.containsKey(index))
+                    dir_assignedMap.put(index, false);
+                return new Value(dir_assignedMap.get(index) == true);
+            default:
+                throw new RuntimeException("Unknown list name: " + listName);
+        }
+    }
+
+    @Override
+    public Value visitIndex(PLCParser.IndexContext ctx) {
+        return visit(ctx.getChild(0));
+    }
+
+    @Override
+    public Value visitArith_expression(PLCParser.Arith_expressionContext ctx) {
+        int left = visit(ctx.getChild(0)).asInteger();
+        int right = visit(ctx.getChild(2)).asInteger();
+
+        if(ctx.getChild(1).getText().equals("+")) {
+            return new Value(left + right);
+        }
         else {
-            setLight(6, LIGHT_RED);
-            setLight(11, LIGHT_RED);
+            return new Value(left - right);
         }
+    }
 
-        // Set Railroad Crossings
-        if(blockMap.get(2).isOccupied() || blockMap.get(3).isOccupied() || blockMap.get(4).isOccupied()) {
-            setCrossing(3, CROSSING_CLOSED);
-        }
-        else {
-            setCrossing(3, CROSSING_OPEN);
-        }
+    @Override
+    public Value visitInt_val(PLCParser.Int_valContext ctx) {
+        return new Value(Integer.parseInt(ctx.getText()));
+    }
 
-        setAuth(1, !blockMap.get(2).isOccupied() && !blockMap.get(3).isOccupied());
-        setAuth(2, !blockMap.get(3).isOccupied() && !blockMap.get(4).isOccupied());
-        setAuth(3, !blockMap.get(4).isOccupied() && !blockMap.get(5).isOccupied());
-        if(blockMap.get(5).getSwitchState() == SWITCH_MAIN) {
-            setAuth(4, !blockMap.get(5).isOccupied() && !blockMap.get(6).isOccupied());
-            setAuth(5, !blockMap.get(6).isOccupied() && !blockMap.get(7).isOccupied());
+    @Override
+    public Value visitInt_variable(PLCParser.Int_variableContext ctx) {
+        String varName = ctx.getText();
+        if(intVarMap.containsKey(varName)) {
+            return new Value(intVarMap.get(varName));
         }
         else {
-            setAuth(4, !blockMap.get(5).isOccupied() && !blockMap.get(11).isOccupied());
-            setAuth(5, !blockMap.get(11).isOccupied() && !blockMap.get(12).isOccupied());
+            throw new RuntimeException("Variable " + varName + " not found");
         }
+    }
 
-        setAuth(6, !blockMap.get(7).isOccupied() && !blockMap.get(8).isOccupied());
-        setAuth(7, !blockMap.get(8).isOccupied() && !blockMap.get(9).isOccupied());
-        setAuth(8, !blockMap.get(9).isOccupied() && !blockMap.get(10).isOccupied());
-        setAuth(9, !blockMap.get(10).isOccupied());
-        setAuth(10, false);
+    @Override
+    public Value visitList_name(PLCParser.List_nameContext ctx) {
+        return new Value(ctx.getText());
+    }
 
-        setAuth(11, !blockMap.get(12).isOccupied() && !blockMap.get(13).isOccupied());
-        setAuth(12, !blockMap.get(13).isOccupied() && !blockMap.get(14).isOccupied());
-        setAuth(13, !blockMap.get(14).isOccupied() && !blockMap.get(15).isOccupied());
-        setAuth(14, !blockMap.get(15).isOccupied());
-        setAuth(15, false);
+    @Override
+    public Value visitValue_false(PLCParser.Value_falseContext ctx) {
+        return new Value(false);
+    }
 
-        System.out.println("Switch = " + blockMap.get(5).getSwitchState());
-
-        System.out.println("Light 6 = " + blockMap.get(6).getLightState());
-        System.out.println("Light 1 = " + blockMap.get(11).getLightState());
-
-        System.out.println("Crossing = " + blockMap.get(3).getLightState());
+    @Override
+    public Value visitValue_true(PLCParser.Value_trueContext ctx) {
+        return new Value(true);
     }
 }
